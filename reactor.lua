@@ -1,6 +1,6 @@
 -- ============================================================
--- Big Reactors / Extreme Reactors Control Panel
--- Cleaned and formatted version
+-- BIG REACTOR // ADVANCED CONTROL PANEL
+-- Redesigned dashboard for OpenComputers / Big Reactors
 -- ============================================================
 
 local API = require("buttonAPI")
@@ -19,127 +19,48 @@ local versionType = "NEW"
 local DEBUG = false
 
 local colors = {
+  cyan      = 0x18D7FF,
   blue      = 0x4286F4,
   purple    = 0xB673D6,
-  red       = 0xC14141,
-  green     = 0x0DA841,
-  black     = 0x000000,
-  white     = 0xFFFFFF,
-  grey      = 0x47494C,
-  lightGrey = 0xBBBBBB
+  red       = 0xE04B4B,
+  green     = 0x20D46B,
+  yellow    = 0xF2C94C,
+  orange    = 0xF2994A,
+  black     = 0x080B10,
+  panel     = 0x111722,
+  panel2    = 0x161D2A,
+  border    = 0x344052,
+  grey      = 0x566070,
+  lightGrey = 0xAAB4C3,
+  white     = 0xF4F7FB
 }
 
--- Screen size for tier 3 GPU.
-gpu.setResolution(132, 38)
+local SCREEN_W = 132
+local SCREEN_H = 38
+local RF_CAPACITY = 10000000
+
+gpu.setResolution(SCREEN_W, SCREEN_H)
 gpu.setBackground(colors.black)
-gpu.fill(1, 1, 132, 38, " ")
+gpu.setForeground(colors.white)
+gpu.fill(1, 1, SCREEN_W, SCREEN_H, " ")
 
 -- ============================================================
--- UI definitions
+-- Layout
 -- ============================================================
 
-local sections = {}
-local graphs = {}
-local infos = {}
-local debug = {}
-
-sections.graph = {
-  x = 5,
-  y = 3,
-  width = 78,
-  height = 33,
-  title = "  INFOS  "
+local panels = {
+  graphs = { x = 3,  y = 6,  width = 83, height = 29, title = "  LIVE TELEMETRY  " },
+  controls = { x = 88, y = 6, width = 42, height = 15, title = "  REACTOR CONTROL  " },
+  limits = { x = 88, y = 23, width = 42, height = 12, title = "  POWER LIMITS  " }
 }
 
-sections.controls = {
-  x = 88,
-  y = 3,
-  width = 40,
-  height = 20,
-  title = "  CONTROLS  "
+local graphs = {
+  tick   = { x = 7, y = 10, width = 77, height = 5, title = "ENERGY / TICK" },
+  stored = { x = 7, y = 18, width = 77, height = 5, title = "ENERGY STORED" },
+  rods   = { x = 7, y = 26, width = 77, height = 5, title = "CONTROL RODS" }
 }
 
-sections.info = {
-  x = 88,
-  y = 26,
-  width = 40,
-  height = 10,
-  title = "  NUMBERS  "
-}
-
-graphs.tick = {
-  x = 8,
-  y = 6,
-  width = 73,
-  height = 8,
-  title = "ENERGY LAST TICK"
-}
-
-graphs.stored = {
-  x = 8,
-  y = 16,
-  width = 73,
-  height = 8,
-  title = "ENERGY STORED"
-}
-
-graphs.rods = {
-  x = 8,
-  y = 26,
-  width = 73,
-  height = 8,
-  title = "CONTROL RODS LEVEL"
-}
-
-infos.tick = {
-  x = 92,
-  y = 28,
-  width = 73,
-  height = 1,
-  title = "RF PER TICK : ",
-  unit = " RF"
-}
-
-infos.stored = {
-  x = 92,
-  y = 30,
-  width = 73,
-  height = 1,
-  title = "ENERGY STORED : ",
-  unit = " RF"
-}
-
-infos.rods = {
-  x = 92,
-  y = 32,
-  width = 73,
-  height = 1,
-  title = "CONTROL ROD LEVEL : ",
-  unit = "%"
-}
-
-infos.fuel = {
-  x = 92,
-  y = 34,
-  width = 73,
-  height = 1,
-  title = "FUEL USAGE : ",
-  unit = " Mb/t"
-}
-
-debug.print = {
-  x = 1,
-  y = 38,
-  width = 73,
-  height = 1,
-  title = "DBG : "
-}
-
--- ============================================================
--- Reactor state
--- ============================================================
-
-reactor.stats = {}
+local reactorStats = {}
 
 local maxRF = 0
 local reactorRodsLevel = {}
@@ -178,12 +99,81 @@ end
 local function file_exists(name)
   local file = io.open(name, "r")
 
-  if file ~= nil then
+  if file then
     file:close()
     return true
   end
 
   return false
+end
+
+local function clamp(value, minimum, maximum)
+  return math.max(minimum, math.min(maximum, value))
+end
+
+local function setText(x, y, text, foreground, background)
+  if foreground then
+    gpu.setForeground(foreground)
+  end
+
+  if background then
+    gpu.setBackground(background)
+  end
+
+  gpu.set(x, y, text)
+end
+
+local function centerText(x, width, y, text, foreground, background)
+  local safeText = tostring(text)
+  local offset = math.max(0, math.floor((width - #safeText) / 2))
+  setText(x + offset, y, safeText, foreground, background)
+end
+
+local function horizontalLine(x, y, width, character)
+  gpu.setBackground(colors.border)
+  gpu.fill(x, y, width, 1, character or " ")
+end
+
+local function drawPanel(panel)
+  gpu.setBackground(colors.panel)
+  gpu.fill(panel.x, panel.y, panel.width, panel.height, " ")
+
+  gpu.setBackground(colors.border)
+  gpu.fill(panel.x, panel.y, panel.width, 1, " ")
+  gpu.fill(panel.x, panel.y + panel.height, panel.width, 1, " ")
+  gpu.fill(panel.x, panel.y, 1, panel.height + 1, " ")
+  gpu.fill(panel.x + panel.width, panel.y, 1, panel.height + 1, " ")
+
+  setText(panel.x + 2, panel.y, panel.title, colors.cyan, colors.black)
+end
+
+local function drawHeader()
+  gpu.setBackground(colors.black)
+  gpu.fill(1, 1, SCREEN_W, 4, " ")
+
+  setText(4, 1, "BIG REACTOR", colors.cyan, colors.black)
+  setText(4, 2, "ADVANCED CONTROL SYSTEM", colors.lightGrey, colors.black)
+
+  gpu.setBackground(colors.border)
+  gpu.fill(1, 4, SCREEN_W, 1, " ")
+
+  centerText(43, 44, 2, "///  REACTOR CORE MONITOR  ///", colors.white, colors.black)
+  setText(112, 1, "v2.0", colors.grey, colors.black)
+  setText(103, 2, "Q = EXIT", colors.lightGrey, colors.black)
+end
+
+local function drawStatusStrip()
+  gpu.setBackground(colors.panel2)
+  gpu.fill(3, 5, 127, 1, " ")
+
+  setText(5, 5, "SYSTEM", colors.grey, colors.panel2)
+  setText(13, 5, "ONLINE", colors.green, colors.panel2)
+  setText(29, 5, "MODE", colors.grey, colors.panel2)
+  setText(36, 5, "AUTO", colors.cyan, colors.panel2)
+  setText(54, 5, "REACTOR", colors.grey, colors.panel2)
+  setText(63, 5, "CONNECTED", colors.green, colors.panel2)
+  setText(84, 5, "LIMIT", colors.grey, colors.panel2)
+  setText(91, 5, minPowerRod .. "% - " .. maxPowerRod .. "%", colors.yellow, colors.panel2)
 end
 
 -- ============================================================
@@ -196,21 +186,21 @@ local function getInfoFromReactor()
 
   reactorRodsLevel = reactor.getControlRodsLevels()
 
-  reactor.stats.tick = toint(math.ceil(energyStats.energyProducedLastTick))
-  reactor.stats.stored = toint(energyStats.energyStored)
-  reactor.stats.rods = toint(reactorRodsLevel[0])
-  reactor.stats.fuel = round(fuelStats.fuelConsumedLastTick, 2)
+  reactorStats.tick = toint(math.ceil(energyStats.energyProducedLastTick))
+  reactorStats.stored = toint(energyStats.energyStored)
+  reactorStats.rods = toint(reactorRodsLevel[0] or 0)
+  reactorStats.fuel = round(fuelStats.fuelConsumedLastTick, 2)
 
-  currentRf = reactor.stats.stored
+  currentRf = reactorStats.stored
 end
 
 local function getInfoFromReactorOLD()
-  reactor.stats.tick = toint(math.ceil(reactor.getEnergyProducedLastTick()))
-  reactor.stats.stored = toint(reactor.getEnergyStored())
-  reactor.stats.rods = toint(math.ceil(reactor.getControlRodLevel(0)))
-  reactor.stats.fuel = round(reactor.getFuelConsumedLastTick(), 2)
+  reactorStats.tick = toint(math.ceil(reactor.getEnergyProducedLastTick()))
+  reactorStats.stored = toint(reactor.getEnergyStored())
+  reactorStats.rods = toint(math.ceil(reactor.getControlRodLevel(0)))
+  reactorStats.fuel = round(reactor.getFuelConsumedLastTick(), 2)
 
-  currentRf = reactor.stats.stored
+  currentRf = reactorStats.stored
 end
 
 -- ============================================================
@@ -239,32 +229,24 @@ local function setInfoToFile()
 end
 
 local function calculateAdjustRodsLevel()
-  local rfTotalMax = 10000000
   local differenceMinMax = maxPowerRod - minPowerRod
 
-  currentRf = reactor.stats.stored
+  currentRf = reactorStats.stored or 0
 
-  local maxPower = (rfTotalMax / 100) * maxPowerRod
-  local minPower = (rfTotalMax / 100) * minPowerRod
+  local maxPower = (RF_CAPACITY / 100) * maxPowerRod
+  local minPower = (RF_CAPACITY / 100) * minPowerRod
 
-  if currentRf >= maxPower then
-    currentRf = maxPower
-  end
+  currentRf = clamp(currentRf, minPower, maxPower)
+  currentRf = toint(currentRf - minPower)
 
-  if currentRf <= minPower then
-    currentRf = minPower
-  end
-
-  currentRf = toint(currentRf - (rfTotalMax / 100) * minPowerRod)
-
-  local rfInBetween = (rfTotalMax / 100) * differenceMinMax
+  local rfInBetween = (RF_CAPACITY / 100) * differenceMinMax
   local rodLevel = 0
 
   if rfInBetween > 0 then
     rodLevel = toint(math.ceil((currentRf / rfInBetween) * 100))
   end
 
-  rodLevel = math.max(0, math.min(100, rodLevel))
+  rodLevel = clamp(rodLevel, 0, 100)
 
   if versionType == "NEW" then
     for key in pairs(reactorRodsLevel) do
@@ -277,15 +259,14 @@ end
 
 local function modifyRods(limit, amount)
   if limit == "min" then
-    local newLevel = minPowerRod + amount
-    minPowerRod = math.max(0, math.min(maxPowerRod - 10, newLevel))
+    minPowerRod = clamp(minPowerRod + amount, 0, maxPowerRod - 10)
   else
-    local newLevel = maxPowerRod + amount
-    maxPowerRod = math.max(minPowerRod + 10, math.min(100, newLevel))
+    maxPowerRod = clamp(maxPowerRod + amount, minPowerRod + 10, 100)
   end
 
   setInfoToFile()
   calculateAdjustRodsLevel()
+  drawStatusStrip()
 end
 
 local function augmentMinLimit()
@@ -335,203 +316,188 @@ local function getInfoFromFile()
   maxPowerRod = tonumber(file:read("*l")) or 100
   file:close()
 
-  minPowerRod = math.max(0, math.min(90, minPowerRod))
-  maxPowerRod = math.max(minPowerRod + 10, math.min(100, maxPowerRod))
+  minPowerRod = clamp(minPowerRod, 0, 90)
+  maxPowerRod = clamp(maxPowerRod, minPowerRod + 10, 100)
 end
 
 -- ============================================================
--- UI drawing
+-- Buttons
 -- ============================================================
 
 local function setButtons()
-  API.setTable("ON", powerOn, 91, 5, 106, 7, "ON", {
+  API.setTable("ON", powerOn, 93, 9, 110, 11, "POWER ON", {
     on = colors.green,
     off = colors.green
   })
 
-  API.setTable("OFF", powerOff, 109, 5, 125, 7, "OFF", {
+  API.setTable("OFF", powerOff, 112, 9, 127, 11, "POWER OFF", {
     on = colors.red,
     off = colors.red
   })
 
-  API.setTable("lowerMinLimit", lowerMinLimit, 91, 15, 106, 17, "-10", {
+  API.setTable("lowerMinLimit", lowerMinLimit, 93, 28, 109, 30, "MIN -10", {
     on = colors.blue,
     off = colors.blue
   })
 
-  API.setTable("lowerMaxLimit", lowerMaxLimit, 109, 15, 125, 17, "-10", {
+  API.setTable("lowerMaxLimit", lowerMaxLimit, 111, 28, 127, 30, "MAX -10", {
     on = colors.purple,
     off = colors.purple
   })
 
-  API.setTable("augmentMinLimit", augmentMinLimit, 91, 19, 106, 21, "+10", {
+  API.setTable("augmentMinLimit", augmentMinLimit, 93, 32, 109, 34, "MIN +10", {
     on = colors.blue,
     off = colors.blue
   })
 
-  API.setTable("augmentMaxLimit", augmentMaxLimit, 109, 19, 125, 21, "+10", {
+  API.setTable("augmentMaxLimit", augmentMaxLimit, 111, 32, 127, 34, "MAX +10", {
     on = colors.purple,
     off = colors.purple
   })
 end
 
-local function printBorders(sectionName)
-  local section = sections[sectionName]
+-- ============================================================
+-- Telemetry rendering
+-- ============================================================
 
-  gpu.setBackground(colors.grey)
-  gpu.fill(section.x, section.y, section.width, 1, " ")
-  gpu.fill(section.x, section.y, 1, section.height, " ")
-  gpu.fill(section.x, section.y + section.height, section.width, 1, " ")
-  gpu.fill(section.x + section.width, section.y, 1, section.height + 1, " ")
-
-  gpu.setBackground(colors.black)
-  gpu.set(section.x + 2, section.y, section.title)
-end
-
-local function printGraphs(graphName)
-  local graph = graphs[graphName]
-
-  gpu.setBackground(colors.lightGrey)
+local function drawGraphFrame(graph, color, subtitle)
+  gpu.setBackground(colors.panel2)
   gpu.fill(graph.x, graph.y, graph.width, graph.height, " ")
 
+  gpu.setBackground(colors.border)
+  gpu.fill(graph.x, graph.y, graph.width, 1, " ")
+  gpu.fill(graph.x, graph.y + graph.height - 1, graph.width, 1, " ")
+
+  setText(graph.x + 2, graph.y, graph.title, color, colors.panel2)
+  setText(graph.x + graph.width - #subtitle - 2, graph.y, subtitle, colors.grey, colors.panel2)
+end
+
+local function drawBar(graph, ratio, color)
+  local innerX = graph.x + 2
+  local innerY = graph.y + 2
+  local innerWidth = graph.width - 4
+  local innerHeight = graph.height - 3
+  local width = clamp(math.floor(innerWidth * ratio), 0, innerWidth)
+
   gpu.setBackground(colors.black)
-  gpu.set(graph.x, graph.y - 1, graph.title)
-end
+  gpu.fill(innerX, innerY, innerWidth, innerHeight, " ")
 
-local function printActiveGraph(graph)
-  gpu.setBackground(colors.green)
-  gpu.fill(graph.x, graph.y, graph.width, graph.height, " ")
+  if width > 0 then
+    gpu.setBackground(color)
+    gpu.fill(innerX, innerY, width, innerHeight, " ")
+  end
+
   gpu.setBackground(colors.black)
-end
-
-local function printStaticControlText()
-  gpu.setForeground(colors.blue)
-  gpu.set(97, 12, "MIN")
-
-  gpu.setForeground(colors.purple)
-  gpu.set(116, 12, "MAX")
-
-  gpu.setForeground(colors.white)
-  gpu.set(102, 10, "AUTO-CONTROL")
-  gpu.set(107, 13, "--")
-end
-
-local function printControlInfos()
-  gpu.setForeground(colors.blue)
-  gpu.set(97, 13, minPowerRod .. "% ")
-
-  gpu.setForeground(colors.purple)
-  gpu.set(116, 13, maxPowerRod .. "% ")
-
   gpu.setForeground(colors.white)
 end
 
-local function printInfos(infoName)
-  local info = infos[infoName]
-  local value = tostring(reactor.stats[infoName]) .. info.unit
-  local maxLength = 30
-  local padding = math.max(0, maxLength - #value)
+local function drawTelemetry()
+  local tickRatio = 0
+  if maxRF > 0 then
+    tickRatio = clamp((reactorStats.tick or 0) / maxRF, 0, 1)
+  end
 
-  gpu.set(info.x, info.y, info.title .. value .. string.rep(" ", padding))
+  local storedRatio = clamp((reactorStats.stored or 0) / RF_CAPACITY, 0, 1)
+  local rodsRatio = clamp((reactorStats.rods or 0) / 100, 0, 1)
+
+  drawGraphFrame(graphs.tick, colors.cyan, tostring(reactorStats.tick or 0) .. " RF/t")
+  drawBar(graphs.tick, tickRatio, colors.cyan)
+
+  drawGraphFrame(graphs.stored, colors.green, tostring(reactorStats.stored or 0) .. " RF")
+  drawBar(graphs.stored, storedRatio, colors.green)
+
+  drawGraphFrame(graphs.rods, colors.orange, tostring(reactorStats.rods or 0) .. "%")
+  drawBar(graphs.rods, rodsRatio, colors.orange)
+
+  setText(7, 16, "OUTPUT", colors.grey, colors.panel)
+  setText(77, 16, "MAX " .. tostring(maxRF) .. " RF/t", colors.grey, colors.panel)
+
+  setText(7, 24, "CAPACITY", colors.grey, colors.panel)
+  setText(73, 24, "10,000,000 RF", colors.grey, colors.panel)
+
+  setText(7, 32, "AUTO MODULATION", colors.grey, colors.panel)
+  setText(27, 32, minPowerRod .. "%  →  " .. maxPowerRod .. "%", colors.yellow, colors.panel)
 end
 
-local function printDebug()
-  local maxLength = 132
-  local info = debug.print
+-- ============================================================
+-- Control / information rendering
+-- ============================================================
+
+local function drawControlPanel()
+  drawPanel(panels.controls)
+
+  centerText(90, 38, 13, "POWER CONTROL", colors.lightGrey, colors.panel)
+  horizontalLine(92, 14, 34, " ")
+
+  setText(93, 16, "AUTO REGULATION", colors.grey, colors.panel)
+  setText(93, 18, "MIN", colors.blue, colors.panel)
+  setText(104, 18, minPowerRod .. "%", colors.white, colors.panel)
+  setText(113, 18, "MAX", colors.purple, colors.panel)
+  setText(124, 18, maxPowerRod .. "%", colors.white, colors.panel)
+
+  setText(93, 20, "ROD TARGET", colors.grey, colors.panel)
+  setText(105, 20, tostring(reactorStats.rods or 0) .. "%", colors.orange, colors.panel)
+end
+
+local function drawLimitsPanel()
+  drawPanel(panels.limits)
+
+  setText(93, 25, "MINIMUM ROD LIMIT", colors.blue, colors.panel)
+  setText(120, 25, minPowerRod .. "%", colors.white, colors.panel)
+
+  setText(93, 26, "MAXIMUM ROD LIMIT", colors.purple, colors.panel)
+  setText(120, 26, maxPowerRod .. "%", colors.white, colors.panel)
+
+  horizontalLine(92, 27, 34, " ")
+
+  setText(93, 31, "TICK", colors.grey, colors.panel)
+  setText(105, 31, tostring(reactorStats.tick or 0) .. " RF", colors.cyan, colors.panel)
+
+  setText(93, 33, "FUEL", colors.grey, colors.panel)
+  setText(105, 33, tostring(reactorStats.fuel or 0) .. " Mb/t", colors.yellow, colors.panel)
+end
+
+local function drawDebug()
+  if not DEBUG then
+    return
+  end
+
   local rodsValues = ""
-
   for key, value in pairs(reactorRodsLevel) do
-    rodsValues = rodsValues .. "[" .. tostring(key) .. "]" .. tostring(value)
+    rodsValues = rodsValues .. "[" .. tostring(key) .. "]" .. tostring(value) .. " "
   end
 
   local debugInformation =
-    "maxRF:" .. tostring(maxRF) ..
-    ", RodsLev:" .. rodsValues ..
-    ", curRodLev:" .. tostring(currentRodLevel) ..
-    ", curRf:" .. tostring(currentRf) ..
-    ", curRfT:" .. tostring(currentRfTick) ..
-    ", min-max:" .. tostring(minPowerRod) .. "-" .. tostring(maxPowerRod)
+    "DBG maxRF=" .. tostring(maxRF) ..
+    " rods=" .. rodsValues ..
+    " currentRf=" .. tostring(currentRf) ..
+    " min/max=" .. tostring(minPowerRod) .. "/" .. tostring(maxPowerRod)
 
-  local padding = math.max(0, maxLength - #debugInformation)
-
-  gpu.set(info.x, info.y, info.title .. debugInformation .. string.rep(" ", padding))
+  gpu.setBackground(colors.black)
+  gpu.setForeground(colors.grey)
+  gpu.fill(1, 37, SCREEN_W, 1, " ")
+  gpu.set(2, 37, debugInformation:sub(1, SCREEN_W - 2))
 end
 
 -- ============================================================
--- Main rendering loop
+-- Main rendering
 -- ============================================================
 
 local function draw()
-  if maxRF < reactor.stats.tick then
-    maxRF = reactor.stats.tick
+  if maxRF < (reactorStats.tick or 0) then
+    maxRF = reactorStats.tick
   end
 
-  if currentRfTick ~= reactor.stats.tick then
-    currentRfTick = reactor.stats.tick
+  drawHeader()
+  drawStatusStrip()
+  drawPanel(panels.graphs)
+  drawTelemetry()
+  drawControlPanel()
+  drawLimitsPanel()
+  drawDebug()
 
-    local width = 0
-    if maxRF > 0 then
-      width = math.ceil(graphs.tick.width * (currentRfTick / maxRF))
-    end
-
-    local graph = {
-      x = graphs.tick.x,
-      y = graphs.tick.y,
-      width = width,
-      height = graphs.tick.height
-    }
-
-    printInfos("tick")
-    printGraphs("tick")
-    printActiveGraph(graph)
-  end
-
-  if currentStored ~= reactor.stats.stored then
-    currentStored = reactor.stats.stored
-
-    local width = math.ceil(graphs.stored.width * (currentStored / 10000000))
-    width = math.max(0, math.min(graphs.stored.width, width))
-
-    local graph = {
-      x = graphs.stored.x,
-      y = graphs.stored.y,
-      width = width,
-      height = graphs.stored.height
-    }
-
-    printInfos("stored")
-    printGraphs("stored")
-    printActiveGraph(graph)
-  end
-
-  if currentRodLevel ~= reactor.stats.rods then
-    currentRodLevel = reactor.stats.rods
-
-    local width = math.ceil(graphs.rods.width * (currentRodLevel / 100))
-    width = math.max(0, math.min(graphs.rods.width, width))
-
-    local graph = {
-      x = graphs.rods.x,
-      y = graphs.rods.y,
-      width = width,
-      height = graphs.rods.height
-    }
-
-    printInfos("rods")
-    printGraphs("rods")
-    printActiveGraph(graph)
-  end
-
-  if currentFuel ~= reactor.stats.fuel then
-    currentFuel = reactor.stats.fuel
-    printInfos("fuel")
-  end
-
-  printControlInfos()
-
-  if DEBUG then
-    printDebug()
-  end
+  gpu.setBackground(colors.black)
+  gpu.setForeground(colors.grey)
 end
 
 -- ============================================================
@@ -556,24 +522,7 @@ local function startup()
   end
 
   setButtons()
-
-  if DEBUG then
-    printDebug()
-  end
-
-  for name in pairs(sections) do
-    printBorders(name)
-  end
-
-  for name in pairs(graphs) do
-    printGraphs(name)
-  end
-
-  for name in pairs(infos) do
-    printInfos(name)
-  end
-
-  printStaticControlText()
+  draw()
 end
 
 -- ============================================================
