@@ -4,7 +4,6 @@
 -- ============================================================
 
 local API = require("buttonAPI")
-local filesystem = require("filesystem")
 local component = require("component")
 local keyboard = require("keyboard")
 local event = require("event")
@@ -146,6 +145,7 @@ local maxRF = 0
 local reactorRodsLevel = {}
 local currentRodLevel = 0
 local currentRf = 0
+local currentStored = 0
 local currentRfTick = 0
 local currentFuel = 0
 
@@ -432,11 +432,7 @@ local function printInfos(infoName)
   local maxLength = 30
   local padding = math.max(0, maxLength - #value)
 
-  gpu.set(
-    info.x,
-    info.y,
-    info.title .. value .. string.rep(" ", padding)
-  )
+  gpu.set(info.x, info.y, info.title .. value .. string.rep(" ", padding))
 end
 
 local function printDebug()
@@ -458,11 +454,7 @@ local function printDebug()
 
   local padding = math.max(0, maxLength - #debugInformation)
 
-  gpu.set(
-    info.x,
-    info.y,
-    info.title .. debugInformation .. string.rep(" ", padding)
-  )
+  gpu.set(info.x, info.y, info.title .. debugInformation .. string.rep(" ", padding))
 end
 
 -- ============================================================
@@ -494,10 +486,10 @@ local function draw()
     printActiveGraph(graph)
   end
 
-  if currentRf ~= reactor.stats.stored then
-    currentRf = reactor.stats.stored
+  if currentStored ~= reactor.stats.stored then
+    currentStored = reactor.stats.stored
 
-    local width = math.ceil(graphs.stored.width * (currentRf / 10000000))
+    local width = math.ceil(graphs.stored.width * (currentStored / 10000000))
     width = math.max(0, math.min(graphs.stored.width, width))
 
     local graph = {
