@@ -4,7 +4,7 @@
 
 Buldacity verwendet ein gemeinsames OpenComputers-Netzwerk. Ein Tier-3-Rechner ist die zentrale Leitstelle und stellt den PC-artigen Buldacity-Server-Desktop bereit. Tier-2-Rechner laufen als Controller für die vorhandenen Maschinen-/Mod-Systeme.
 
-Die Netzwerkbasis nutzt OpenComputers-Modem-Nachrichten. OpenComputers stellt dafür Modem-Komponenten und `modem_message`-Signale bereit. citeturn0search0
+Die Netzwerkbasis nutzt OpenComputers-Modem-Nachrichten und `modem_message`-Signale.
 
 ## Was wird benötigt?
 
@@ -109,8 +109,6 @@ Der Dienst erledigt:
 - `PING` / `PONG`
 - Empfang von `INPUT`
 - Weitergabe von Remote-Tastatur-, Touch- und Scroll-Signalen an den Tier-2-Computer
-
-OpenComputers stellt für solche Anwendungen das Event-System und Modem-Signale bereit. citeturn0search0
 
 ### Launcher
 
