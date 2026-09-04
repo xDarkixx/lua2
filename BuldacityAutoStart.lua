@@ -4,9 +4,6 @@
 -- Role is selected by /home/buldacity-role.cfg:
 --   SERVER  -> starts BuldacityOS_Tier3.lua
 --   CLIENT  -> starts the configured Network client controller
---
--- Default role is CLIENT so a copied client setup cannot accidentally create
--- another central BULDACITY server.
 
 local computer=require("computer")
 local filesystem=require("filesystem")
@@ -64,12 +61,24 @@ local function readConfig()
   return role,client
 end
 
+-- Resolve BULDACITY programs in both normal OpenOS locations.
+-- /home is the recommended installation directory; / is kept for
+-- compatibility with installations that place scripts at the root.
+local function findProgram(path)
+  local candidates={"/home/"..path,"/"..path,path}
+  for i=1,#candidates do
+    if filesystem.exists(candidates[i]) then return candidates[i] end
+  end
+  return nil
+end
+
 local function start(path)
-  if not filesystem.exists("/"..path) then
-    io.stderr:write("BULDACITY AUTOSTART: missing /"..path.."\n")
+  local resolved=findProgram(path)
+  if not resolved then
+    io.stderr:write("BULDACITY AUTOSTART: missing "..path.." (checked /home and /)\n")
     return false
   end
-  local ok,err=xpcall(function() dofile("/"..path) end,debug.traceback)
+  local ok,err=xpcall(function() dofile(resolved) end,debug.traceback)
   if not ok then
     io.stderr:write("BULDACITY AUTOSTART FAILED: "..tostring(err).."\n")
     return false
@@ -77,7 +86,6 @@ local function start(path)
   return true
 end
 
--- Small delay gives OpenComputers components/network time to initialize.
 computer.beep(880,0.05)
 computer.pullSignal(1)
 
