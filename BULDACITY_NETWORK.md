@@ -104,7 +104,7 @@ Ein Relay/Access Point muss dabei physisch korrekt mit den jeweiligen Netzwerkse
 
 Die `Network.lua` markiert Clients als `relay=true` und überträgt zusätzlich Funkstatus, Signalstärke und die zuletzt erkannte Funkentfernung. Eine Relay-Verbindung ist dabei transparent und benötigt keinen separaten Lua-Relay-Prozess.
 
-OpenComputers dokumentiert, dass Wireless Network Cards für Funkpakete eine gesetzte Signalstärke benötigen. Relays/Access Points können Netzwerk-Nachrichten zwischen Netzwerken weiterleiten. citeturn0search2turn0search6
+OpenComputers dokumentiert, dass Wireless Network Cards für Funkpakete eine gesetzte Signalstärke benötigen. Relays/Access Points können Netzwerk-Nachrichten zwischen Netzwerken weiterleiten.
 
 ## 7. Remote-PC
 
