@@ -13,6 +13,32 @@ OpenComputers Lua-Programme für Minecraft 1.7.10 und die im jeweiligen Script a
 - **ProjectE** – Buldacity-Komponenten-Dashboard
 - **RFTools** – Buldacity-Komponenten-Dashboard
 - **SGCraft** – Stargate-Dashboard mit OpenComputers-Anbindung
+- **PneumaticCraft** – Buldacity-Dashboard und Netzwerk-Controller für die OC-Drohnenanbindung
+- **LogisticsPipes 0.9.3.132** – Buldacity-Logistik-Dashboard, Live-Komponentenscan, API-Erkennung und Netzwerkbetrieb
+
+## LogisticsPipes 0.9.3.132
+
+Für `logisticspipes-0.9.3.132.jar` auf Minecraft 1.7.10 gibt es zwei Startvarianten:
+
+- `LogisticsPipes_Modern.lua` – lokale Buldacity-Touch-Oberfläche
+- `LogisticsPipesNetwork_Modern.lua` – Tier-2-Version mit Buldacity-Netzwerk
+
+Das Dashboard arbeitet mit der **tatsächlich zur Laufzeit exponierten OpenComputers-API**. Es erfindet keine feste LP-Adresse und keine nicht vorhandenen Methoden. Das ist wichtig, weil LP/OpenComputers-Kombinationen je nach Setup unterschiedlich erkannt werden können, unter anderem als `bc_pipe`.
+
+Die Oberfläche bietet:
+
+- Buldacity Sci-Fi/Neon-Design
+- Live-Komponentenliste
+- automatische Aktualisierung alle 2 Sekunden
+- LP-Kandidaten-Erkennung
+- Auswahl des LP-Endpunkts per Touch
+- vollständige Anzeige der vom OC-Runtime gemeldeten Methoden
+- API-Methodenzähler
+- Inventar-/Item-/Request-/Crafting-relevante Erkennung über die reale API
+- sicheren Zero-Argument-API-Probe-Modus
+- Netzwerkstatus
+- Tier-2-Anbindung
+- manuelles Refresh und Tastatursteuerung
 
 ## Buldacity Netzwerk
 
@@ -66,5 +92,8 @@ Dort steht Schritt für Schritt:
 - `RFTools_Modern.lua`
 - `SGCraft_Modern.lua`
 - `ThermalExpansion_Modern.lua`
+- `PneumaticCraft_Modern.lua`
+- `LogisticsPipes_Modern.lua`
+- `LogisticsPipesNetwork_Modern.lua`
 
 Die ursprünglichen Lua-Dateien bleiben erhalten.
