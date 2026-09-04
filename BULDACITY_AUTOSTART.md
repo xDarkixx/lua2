@@ -1,64 +1,89 @@
-# BULDACITY automatic startup
+# BULDACITY Autostart – Schritt für Schritt
 
-`BuldacityAutoStart.lua` is the common boot launcher for BULDACITY/2.
-It is intended to be installed as `/home/autorun.lua` on each OpenComputers PC.
+`BuldacityAutoStart.lua` ist der gemeinsame Boot-Launcher für BULDACITY/2.
 
-## Central server PC
+## 1. Datei installieren
 
-Create `/home/buldacity-role.cfg`:
+`BuldacityAutoStart.lua` nach `/home/autorun.lua` kopieren.
+
+Der Launcher wartet kurz nach dem Boot, damit OpenComputers und Netzwerk-Komponenten initialisiert sind.
+
+## 2. Zentrale konfigurieren
+
+Datei `/home/buldacity-role.cfg` anlegen:
 
 ```text
 ROLE=SERVER
 ```
 
-After a reboot, the PC automatically starts:
+Nach dem Neustart wird gestartet:
 
 ```text
 BuldacityOS_Tier3.lua
 ```
 
-## Normal controller client PC
+## 3. Client konfigurieren
 
-Create `/home/buldacity-role.cfg` with the client to start, for example:
+Datei `/home/buldacity-role.cfg`:
 
 ```text
 ROLE=CLIENT
 CLIENT=BigReactors
 ```
 
-The launcher then starts:
+Dadurch wird automatisch gestartet:
 
 ```text
 ReactorBigReactors043A_Network.lua
 ```
 
-Other supported client names are:
+## 4. Unterstützte Client-Namen
 
-- 3DPrinter
-- AE2
-- DieselGenerator
-- ExtraPlanets
-- Forestry
-- Galacticraft
-- Gendustry
-- ImmersiveEngineering
-- ImmersiveIntegration
-- ImmersiveRailroading
-- IndustrialCraft2
-- LogisticsPipes
-- Mekanism
-- PneumaticCraft
-- ProjectE
-- RFTools
-- RotaryCraft
-- SGCraft
-- ThermalExpansion
-- BigReactors
+- `3DPrinter`
+- `AE2`
+- `DieselGenerator`
+- `ExtraPlanets`
+- `Forestry`
+- `Galacticraft`
+- `Gendustry`
+- `ImmersiveEngineering`
+- `ImmersiveIntegration`
+- `ImmersiveRailroading`
+- `IndustrialCraft2`
+- `LogisticsPipes`
+- `Mekanism`
+- `PneumaticCraft`
+- `ProjectE`
+- `RFTools`
+- `RotaryCraft`
+- `SGCraft`
+- `ThermalExpansion`
+- `BigReactors`
 
-## Result
+## 5. Pfadauflösung
 
-After a Minecraft/OpenComputers computer reboot, the configured BULDACITY program starts automatically. The launcher waits one second before starting so the OpenComputers environment and network components have time to initialize.
+Der Launcher sucht Programme in dieser Reihenfolge:
 
-The default role is `CLIENT`, which prevents a copied setup from accidentally starting additional central servers.
+1. `/home/<programm>`
+2. `/<programm>`
+3. über die OpenOS-Pfadauflösung
 
-The original `*_Modern.lua` controllers are not modified by the autostart system.
+Damit wird der frühere Fehler mit fest verdrahteten Root-Pfaden vermieden.
+
+## 6. Empfehlung
+
+Alle BULDACITY-Programme bevorzugt unter `/home` installieren. `Network.lua` muss bei Network-Controllern ebenfalls erreichbar sein.
+
+## 7. Kontrolle nach Neustart
+
+### Server
+- BULDACITY Desktop erscheint.
+- `NETWORK` öffnen.
+- `DEVICES` öffnen.
+
+### Client
+- Network-Controller startet.
+- Client erscheint nach HELLO/Heartbeat auf der Zentrale.
+- `REMOTE` kann danach getestet werden.
+
+Der Autostart verändert die eigentlichen `_Modern.lua` Controller nicht.
