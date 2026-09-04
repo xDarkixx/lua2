@@ -1,120 +1,137 @@
-# BULDACITY – Schritt für Schritt
+# BULDACITY v9 – Schritt für Schritt
 
-Diese Anleitung beschreibt die aktuelle Installation für Minecraft 1.7.10 + Forge + OpenComputers.
+Diese Anleitung beschreibt die aktuelle grafische BULDACITY-Version für Minecraft 1.7.10 + Forge + OpenComputers.
 
-**Wichtig:** Alle BULDACITY-Lua-Dateien werden auf dem OpenComputers-Rechner ausschließlich unter `/home` installiert und von dort geladen. Es gibt keine `/lib`-Loader mehr.
+## 1. Was v9 bietet
 
-## 1. Voraussetzungen
+BULDACITY verwendet jetzt eine gemeinsame GPU-Oberfläche (`BuldacityUI.lua`) mit:
+
+- echten GPU-Flächen statt reiner ASCII-Balken
+- horizontalen und vertikalen Fortschrittsbalken
+- großen Dashboard-Karten
+- Status-LEDs und Badges
+- Buttons und Touch-Flächen
+- Messanzeigen/Gauges
+- Live-Sparklines und Diagrammen
+- Pixel-Icons für PC, Netzwerk, Energie, Reaktor, Maschine, Speicher, Drucker und Flüssigkeiten
+- automatischer Anpassung an die vorhandene Screen-Auflösung
+- Component-Explorer mit Component-Typ und OpenComputers-Adresse
+- Remote-PC-Anzeige
+- Netzwerk-/Relay-/Wireless-Dashboard
+- Reactor-Dashboard
+
+Die Oberfläche ist für Tier-3-Systeme und große Auflösungen bis zum vorhandenen GPU/Screen-Limit ausgelegt und fällt bei kleineren Screens automatisch kompakter aus.
+
+## 2. Voraussetzungen
 
 - Minecraft `1.7.10`
 - Forge `10.13.4.1614`
 - OpenComputers für Minecraft 1.7.10
-- die jeweils benötigten Mod- und Adapter-Versionen
+- Tier-3-CPU/GPU/RAM für die Zentrale
+- Screen + GPU für grafische Oberflächen
+- Network Card oder Wireless Network Card für Netzwerkbetrieb
+- die Mod, deren Geräte gesteuert werden sollen
 
-## 2. Zentrale BULDACITY-Maschine
+## 3. Grundregel: alles nach `/home`
 
-Baue einen Tier-3-OpenComputers-PC mit CPU, RAM, Speicher, GPU, Screen, Keyboard und Network Card oder Wireless Network Card.
-
-## 3. Exakte Dateiablage – Zentrale
-
-**Alle diese Dateien gehören nach `/home`:**
+Alle BULDACITY-Lua-Dateien werden auf dem OpenComputers-Rechner unter `/home` abgelegt.
 
 ```text
 /home/Network.lua
+/home/BuldacityUI.lua
 /home/BuldacityOS_Tier3.lua
 /home/BuldacityDesktop.lua
-/home/BuldacityUI.lua
+/home/BuldacityComponentServer.lua
+/home/BuldacityComponentAgent.lua
 /home/BuldacityComponentDashboard.lua
 /home/BuldacityAutoStart.lua
 /home/BuldacityNetworkTest.lua
 /home/BuldacityWirelessCheck_Modern.lua
 ```
 
-Keine dieser BULDACITY-Dateien muss nach `/lib`, `/usr/lib` oder `/` kopiert werden.
+Die Mod-spezifischen Dateien kommen ebenfalls nach `/home`.
 
-## 4. Zentrale starten
+## 4. Zentrale aufbauen
+
+Baue einen Tier-3-PC mit:
+
+```text
+CPU
+RAM
+EEPROM/Bootmedium
+Festplatte/Filesystem
+GPU
+Screen
+Keyboard
+Network Card oder Wireless Network Card
+```
+
+Für maximale Darstellung:
+
+```text
+Tier-3 GPU
+Tier-3 Screen
+```
+
+## 5. Zentrale Dateien installieren
+
+Kopiere mindestens:
+
+```text
+/home/Network.lua
+/home/BuldacityUI.lua
+/home/BuldacityOS_Tier3.lua
+/home/BuldacityDesktop.lua
+/home/BuldacityComponentServer.lua
+/home/BuldacityComponentDashboard.lua
+/home/BuldacityAutoStart.lua
+/home/BuldacityNetworkTest.lua
+/home/BuldacityWirelessCheck_Modern.lua
+```
+
+## 6. Zentrale starten
+
+Manuell:
 
 ```lua
 dofile("/home/BuldacityOS_Tier3.lua")
 ```
 
-`BuldacityOS_Tier3.lua` startet fest:
+`BuldacityOS_Tier3.lua` startet den Desktop aus `/home`.
+
+## 7. Grafische Oberfläche prüfen
+
+Nach dem Start sollte die BULDACITY-Oberfläche erscheinen.
+
+Die wichtigsten Seiten sind:
 
 ```text
-/home/BuldacityDesktop.lua
+DESKTOP
+NETWORK
+DEVICES
+REMOTE
+REACTOR
 ```
 
-Die zentrale Desktop-Oberfläche enthält Netzwerkzentrale, Geräteverwaltung, Remote-PC, Systemmonitor, Apps, Laufwerke und Wireless-Diagnose.
+Die Darstellung verwendet GPU-Hintergründe, Panels, Balken, Icons und Statusanzeigen.
 
-## 5. Wireless-Hardware prüfen
+## 8. Component-System aktivieren
 
-```lua
-dofile("/home/BuldacityWirelessCheck_Modern.lua")
-```
-
-Die Diagnose prüft Modems, Wireless-Hardware, Signalstärke, Relay, Access Point und Wireless-Pfade.
+Die zentrale Component-Verwaltung läuft über:
 
 ```text
-WIRELESS READY
-WIRELESS NOT READY
-WIRELESS MISSING
+/home/BuldacityComponentServer.lua
 ```
 
-- `WIRELESS MISSING`: Wireless Network Card einsetzen.
-- `WIRELESS NOT READY`: Wireless-Hardware vorhanden, aber Signalstärke nicht korrekt gesetzt.
-- `WIRELESS READY`: Hardware und Signal sind bereit. Danach zusätzlich PING/PONG prüfen.
-
-## 6. Client-PC installieren
-
-Für jeden Mod wird ein eigener OpenComputers-PC verwendet.
-
-Minimal:
+Der Agent auf jedem Client läuft über:
 
 ```text
-CPU + RAM + Speicher + Network Card
+/home/BuldacityComponentAgent.lua
 ```
 
-Für grafische Controller zusätzlich:
+Der Agent liest die OpenComputers-Component-Liste und überträgt Typ + Adresse an den Server.
 
-```text
-GPU + Screen + Keyboard
-```
-
-**Auf jeden Netzwerk-Client kommt `/home/Network.lua`.**
-
-Danach kommen der passende Network-Wrapper und der dazugehörige Controller ebenfalls nach `/home`.
-
-### Beispiel 3D Printer
-
-```text
-/home/Network.lua
-/home/3DPrinterNetwork_Modern.lua
-/home/3DPrinter_Modern.lua
-```
-
-### Beispiel Big Reactors
-
-```text
-/home/Network.lua
-/home/ReactorBigReactors043A_Network.lua
-/home/ReactorBigReactors043A_Touch_Responsive.lua
-```
-
-## 7. Allgemeines Schema
-
-```text
-/home/
-├── Network.lua
-├── BuldacityUI.lua
-├── <Mod>Network_Modern.lua
-└── <Mod>_Modern.lua
-```
-
-Die Network-Wrapper verwenden `Network.startClient(...)` und laden anschließend den lokalen Controller aus `/home` bzw. aus dem aktuellen `/home`-Arbeitsverzeichnis.
-
-## 8. Mod-Komponente anschließen
-
-Komponenten prüfen:
+Beispiel einer lokalen Prüfung:
 
 ```lua
 local component=require("component")
@@ -123,78 +140,225 @@ for address,typ in component.list() do
 end
 ```
 
-Bei einem Adapter:
+## 9. Component Dashboard öffnen
 
-```text
-OpenComputers-PC → OC-Kabel → Adapter → Mod-Block
+```lua
+dofile("/home/BuldacityComponentDashboard.lua")
 ```
 
-## 9. Lokale GUI testen
+Dort können die erkannten PCs und Componenten grafisch betrachtet werden.
 
-1. passenden `<Mod>_Modern.lua` Controller nach `/home` kopieren
-2. GUI starten
-3. `SCAN` ausführen
-4. Komponenten prüfen
-5. lokale Funktionen testen
-6. erst danach den Network-Wrapper starten
-
-Gemeinsame GUI-Bibliothek:
+Eine Component wird sinngemäß angezeigt als:
 
 ```text
+ICON  COMPONENT TYPE
+      ID: abcdef12-....
+      STATUS: ONLINE
+```
+
+## 10. Netzwerk-Topologie
+
+### Kabel
+
+```text
+ZENTRALE
+   │
+ OC-Kabel
+   │
+ CLIENT
+```
+
+### Wireless
+
+```text
+ZENTRALE
+   │
+ Wireless Network Card
+   )))
+       (((
+          CLIENT
+```
+
+### Relay
+
+```text
+ZENTRALE ── Kabel ── RELAY ))) ((( CLIENT
+```
+
+Ein Relay benötigt für einen Wireless-Pfad die passende Wireless-Hardware.
+
+## 11. Wireless prüfen
+
+```lua
+dofile("/home/BuldacityWirelessCheck_Modern.lua")
+```
+
+Erwartete Zustände:
+
+```text
+WIRELESS READY
+WIRELESS NOT READY
+WIRELESS MISSING
+```
+
+`READY` bedeutet lokale Wireless-Hardware + konfigurierte Signalstärke.
+
+Für eine echte Ende-zu-Ende-Prüfung anschließend den Netzwerk-Test ausführen.
+
+## 12. Client-PC installieren
+
+Jeder Mod kann einen eigenen OpenComputers-Client erhalten.
+
+Grundausstattung:
+
+```text
+CPU + RAM + Filesystem + Network Card
+```
+
+Für lokale grafische Mod-Oberflächen:
+
+```text
+GPU + Screen + Keyboard
+```
+
+Auf jeden Netzwerk-Client kommt:
+
+```text
+/home/Network.lua
 /home/BuldacityUI.lua
+/home/BuldacityComponentAgent.lua
 ```
 
-## 10. Netzwerk testen
+Danach die passende Mod-Network-Datei und den Mod-Controller.
 
-Zentrale zuerst:
+## 13. Mod-Dateien
+
+Die aktuelle Repo enthält unter anderem grafische Controller für:
+
+```text
+3D Printer
+Applied Energistics 2
+Diesel Generator
+Extra Planets
+Forestry
+Galacticraft
+Gendustry
+Immersive Engineering
+Immersive Integration
+Immersive Railroading
+IndustrialCraft 2
+Logistics Pipes
+Mekanism
+PneumaticCraft
+ProjectE
+RFTools
+RotaryCraft
+SGCraft
+Thermal Expansion
+Big Reactors / Extreme Reactors
+```
+
+Je nach Mod werden die tatsächlich verfügbaren Werte automatisch über die vorhandene Component-/Adapter-API verwendet.
+
+## 14. Beispiel: 3D Printer
+
+```text
+/home/Network.lua
+/home/BuldacityUI.lua
+/home/BuldacityComponentAgent.lua
+/home/3DPrinterNetwork_Modern.lua
+/home/3DPrinter_Modern.lua
+```
+
+Start:
+
+```lua
+dofile("/home/3DPrinterNetwork_Modern.lua")
+```
+
+## 15. Beispiel: Big Reactors
+
+```text
+/home/Network.lua
+/home/BuldacityUI.lua
+/home/BuldacityComponentAgent.lua
+/home/ReactorBigReactors043A_Network.lua
+/home/ReactorBigReactors043A_Touch_Responsive.lua
+```
+
+Die Zentrale kann gemeldete Reactor-Telemetrie als grafische Karten und Verlauf darstellen.
+
+## 16. Beispiel: Diesel Generator
+
+```text
+/home/Network.lua
+/home/BuldacityUI.lua
+/home/BuldacityComponentAgent.lua
+/home/DieselGeneratorNetwork_Modern.lua
+/home/DieselGenerator_Modern.lua
+```
+
+Die Diesel-GUI verwendet grafische Füllstandsbalken, Statusanzeigen, Automation und Component-Erkennung.
+
+## 17. Netzwerk starten
+
+Zuerst Zentrale:
 
 ```lua
 dofile("/home/BuldacityOS_Tier3.lua")
 ```
 
-Client danach:
+Dann Client:
 
 ```lua
 dofile("/home/<Mod>Network_Modern.lua")
 ```
 
-Netzwerk:
+BULDACITY-Netzwerk:
 
 ```text
 Protokoll: BULDACITY/2
-Port:     4242
+Port:      4242
 ```
 
-Der Client sollte unter `DEVICES` erscheinen.
+## 18. Client entdecken
 
-## 11. Automatische Netzwerkdiagnose
-
-`Network.lua` prüft HELLO, Heartbeat, Wireless-Hardware, Signalstärke, Relay/Access Point, Entfernung und PING/PONG.
-
-`WIRELESS READY` bedeutet nur, dass die lokale Wireless-Hardware einsatzbereit ist. Erst `PING PASS` bestätigt die End-to-End-Verbindung.
-
-## 12. Big Reactors
+Auf der Zentrale:
 
 ```text
-/home/Network.lua
-/home/ReactorBigReactors043A_Network.lua
-/home/ReactorBigReactors043A_Touch_Responsive.lua
+DESKTOP → SCAN
 ```
 
-Mögliche OpenComputers-Komponenten sind unter anderem `br_reactor` und `br_turbine`.
+oder Netzwerk-Test:
 
-## 13. Autostart
+```lua
+dofile("/home/BuldacityNetworkTest.lua")
+```
 
-Installiere:
+Der Client muss anschließend unter `DEVICES` erscheinen.
+
+## 19. Remote-PC öffnen
+
+1. `DESKTOP` öffnen
+2. Client markieren
+3. `ENTER` oder `REMOTE` verwenden
+4. `REQUEST SCREEN` ausführen, falls noch kein Bild vorhanden ist
+
+Der Client überträgt sein OpenComputers-Screen zeilenweise zur Zentrale.
+
+## 20. Eingaben an Remote-PC senden
+
+Die Remote-Oberfläche unterstützt die Weitergabe von Eingaben, sofern der Client die entsprechenden Signale empfängt.
+
+Damit kann die Zentrale als Remote-Control-Station verwendet werden.
+
+## 21. Autostart
+
+Auf jedem Rechner:
 
 ```text
 /home/BuldacityAutoStart.lua
 /home/autorun.lua
-```
-
-Konfiguration:
-
-```text
 /home/buldacity-role.cfg
 ```
 
@@ -211,11 +375,54 @@ ROLE=CLIENT
 CLIENT=BigReactors
 ```
 
-Der Autostart setzt `/home` als Arbeitsverzeichnis und startet alle BULDACITY-Programme direkt aus `/home`.
+Der Autostart verwendet `/home` als Arbeitsverzeichnis und lädt die Programme von dort.
 
-## 14. `file not found` beheben
+## 22. Maximale Grafik herausholen
 
-### `module 'Network' not found`
+Für maximale Darstellung:
+
+```text
+Tier-3 GPU
+Tier-3 Screen
+hohe verfügbare Screen-Auflösung
+Keyboard
+```
+
+Die UI verwendet:
+
+```text
+gpu.setBackground()
+gpu.setForeground()
+gpu.fill()
+gpu.set()
+```
+
+Dadurch werden echte farbige Flächen, Balken und UI-Elemente gezeichnet.
+
+Die gemeinsame Bibliothek ist:
+
+```text
+/home/BuldacityUI.lua
+```
+
+## 23. Was die Grafikbibliothek bereitstellt
+
+```text
+UI.panel()       Panels/Karten
+UI.button()      Buttons
+UI.bar()         Balken
+UI.bar2()        große Balken
+UI.vbar()        vertikale Balken
+UI.gauge()       Messanzeige
+UI.led()         Status-LED
+UI.badge()       Status-Badge
+UI.sparkline()   kleine Live-Kurve
+UI.graph()       Live-Diagramm
+UI.icon()        Pixel-Icon
+UI.card()        Dashboard-Karte
+```
+
+## 24. Fehler: Network nicht gefunden
 
 Prüfen:
 
@@ -223,16 +430,11 @@ Prüfen:
 /home/Network.lua
 ```
 
-Danach sicherstellen, dass `/home` das Arbeitsverzeichnis ist:
+Dann:
 
 ```lua
 local shell=require("shell")
 shell.setWorkingDirectory("/home")
-```
-
-Dann testen:
-
-```lua
 local Network=require("Network")
 print(Network.PROTOCOL)
 ```
@@ -243,7 +445,7 @@ Erwartet:
 BULDACITY/2
 ```
 
-### `module 'BuldacityUI' not found`
+## 25. Fehler: BuldacityUI nicht gefunden
 
 Prüfen:
 
@@ -251,55 +453,51 @@ Prüfen:
 /home/BuldacityUI.lua
 ```
 
-und `/home` als Arbeitsverzeichnis verwenden.
-
-### `BuldacityDesktop.lua not found`
-
-Prüfen:
-
-```text
-/home/BuldacityDesktop.lua
-```
-
-Start:
+und:
 
 ```lua
-dofile("/home/BuldacityOS_Tier3.lua")
+local shell=require("shell")
+shell.setWorkingDirectory("/home")
+local UI=require("BuldacityUI")
+print(UI.W,UI.H)
 ```
 
-### Controller nicht gefunden
+## 26. Fehler: kein Client
 
-Beide passenden Dateien müssen in `/home` liegen:
+Prüfe in dieser Reihenfolge:
 
 ```text
-/home/<Mod>Network_Modern.lua
-/home/<Mod>_Modern.lua
+1. Client-PC läuft
+2. Network Card vorhanden
+3. /home/Network.lua vorhanden
+4. /home/BuldacityComponentAgent.lua vorhanden
+5. passender Network-Wrapper vorhanden
+6. Port 4242 geöffnet
+7. Wireless-Signal > 0, falls Wireless
+8. Relay/Access Point korrekt aufgebaut
+9. Zentrale mit SCAN aktualisieren
+10. BuldacityNetworkTest.lua ausführen
 ```
 
-## 15. Schneller Datei-Check
+## 27. Fehler: Component fehlt
+
+Lokale Komponenten anzeigen:
 
 ```lua
-local fs=require("filesystem")
-for _,p in ipairs({
-  "/home/Network.lua",
-  "/home/BuldacityOS_Tier3.lua",
-  "/home/BuldacityDesktop.lua",
-  "/home/BuldacityUI.lua",
-  "/home/BuldacityComponentDashboard.lua",
-  "/home/BuldacityAutoStart.lua",
-  "/home/BuldacityNetworkTest.lua",
-  "/home/BuldacityWirelessCheck_Modern.lua"
-}) do
-  print(p,fs.exists(p) and "OK" or "MISSING")
+local component=require("component")
+for address,typ in component.list() do
+  print(address,typ)
 end
 ```
 
-## 16. Vollständiger Ablauf
+Wenn der Adapter/Mod nicht auftaucht, ist zunächst die Mod-/OC-Verkabelung zu prüfen.
+
+## 28. Vollständiger Startablauf
 
 ```text
 Minecraft 1.7.10
  ↓
-Forge 10.13.4.1614
+Forge
  ↓
 OpenComputers
  ↓
@@ -307,79 +505,59 @@ Tier-3-Zentrale
  ↓
 /home/Network.lua
  ↓
+/home/BuldacityUI.lua
+ ↓
+/home/BuldacityComponentServer.lua
+ ↓
 /home/BuldacityOS_Tier3.lua
  ↓
-/home/BuldacityDesktop.lua
+BULDACITY v9 Desktop
  ↓
-Wireless-Hardware prüfen
+Wireless / Netzwerk prüfen
  ↓
-Mod-Komponente prüfen
+Client-PC starten
  ↓
-Lokale GUI testen
+Component Agent
  ↓
-/home/<Mod>Network_Modern.lua
+Mod-Network-Wrapper
  ↓
 BULDACITY/2 : 4242
  ↓
-DEVICES
+DESKTOP / DEVICES
  ↓
 PING/PONG
  ↓
 REMOTE
  ↓
+Reactor / Mod Dashboard
+ ↓
 Autostart
 ```
 
-## 17. Abschlussprüfung
+## 29. Abschlussprüfung
 
-- `/home/Network.lua` vorhanden
-- `/home/BuldacityUI.lua` vorhanden, wenn benötigt
-- `/home/BuldacityOS_Tier3.lua` vorhanden
-- `/home/BuldacityDesktop.lua` vorhanden
-- Desktop startet
-- lokale Mod-GUI startet
-- Komponenten werden erkannt
-- Wireless-Hardware wird erkannt, wenn Wireless verwendet wird
-- Wireless-Signal ist konfiguriert
-- Client erscheint unter `DEVICES`
-- Heartbeat bleibt aktiv
-- PING/PONG funktioniert
-- Remote-Bildschirm funktioniert
-- Eingaben funktionieren
-- Autostart funktioniert
+- [ ] `/home/Network.lua`
+- [ ] `/home/BuldacityUI.lua`
+- [ ] `/home/BuldacityOS_Tier3.lua`
+- [ ] `/home/BuldacityDesktop.lua`
+- [ ] `/home/BuldacityComponentServer.lua`
+- [ ] `/home/BuldacityComponentAgent.lua`
+- [ ] `/home/BuldacityComponentDashboard.lua`
+- [ ] GPU + Screen vorhanden
+- [ ] lokale Mod-Komponente erkannt
+- [ ] Wireless bereit, falls benötigt
+- [ ] Client erscheint unter `DEVICES`
+- [ ] Heartbeat läuft
+- [ ] PING/PONG funktioniert
+- [ ] Component IDs erscheinen
+- [ ] Remote-Screen funktioniert
+- [ ] Touch/Keyboard funktioniert
+- [ ] Autostart funktioniert
 
-## 18. Kurzfassung der Ablage
+## 30. Wichtig
 
-### Zentrale
+BULDACITY v9 ist eine GPU-basierte Zeichenoberfläche für OpenComputers. Sie nutzt die tatsächlich verfügbaren GPU-/Screen-Funktionen und keine moderne Desktop-Grafik-Engine.
 
-```text
-/home/Network.lua
-/home/BuldacityOS_Tier3.lua
-/home/BuldacityDesktop.lua
-/home/BuldacityUI.lua
-/home/BuldacityComponentDashboard.lua
-/home/BuldacityAutoStart.lua
-/home/BuldacityNetworkTest.lua
-/home/BuldacityWirelessCheck_Modern.lua
-/home/autorun.lua
-/home/buldacity-role.cfg
-```
+Das bedeutet: Die UI kann sehr weit grafisch gehen, bleibt aber an die OpenComputers-GPU- und Screen-Grenzen von Minecraft 1.7.10 gebunden.
 
-### Jeder Netzwerk-Client
-
-```text
-/home/Network.lua
-/home/BuldacityUI.lua                 ← falls benötigt
-/home/<Mod>Network_Modern.lua
-/home/<Mod>_Modern.lua
-```
-
-### Big Reactors
-
-```text
-/home/Network.lua
-/home/ReactorBigReactors043A_Network.lua
-/home/ReactorBigReactors043A_Touch_Responsive.lua
-```
-
-**Grundregel: Alles von BULDACITY kommt nach `/home`. Keine `/lib`-Loader verwenden.**
+**Grundregel: Alle BULDACITY-Dateien nach `/home`. Keine `/lib`-Loader verwenden.**
