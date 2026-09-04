@@ -34,7 +34,6 @@ local function readConfig()
  return role,client
 end
 
--- Force the shared BULDACITY module directory into OpenOS module lookup.
 pcall(function() shell.setWorkingDirectory("/home") end)
 package.path="/home/?.lua;/home/?/init.lua;"..(package.path or "")
 
@@ -50,8 +49,12 @@ computer.beep(880,0.05)
 computer.pullSignal(1)
 local role,client=readConfig()
 if role=="SERVER" then
+ -- The Tier-3 server inventories its own components and polls every client.
+ start("BuldacityComponentServer.lua")
  start("BuldacityOS_Tier3.lua")
 elseif role=="CLIENT" then
+ -- Every client runs the component agent before its mod controller.
+ start("BuldacityComponentAgent.lua")
  local file=CLIENTS[client or ""]
  if not file then
   io.stderr:write("BULDACITY AUTOSTART: CLIENT is not configured.\n")
