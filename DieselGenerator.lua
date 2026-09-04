@@ -2,9 +2,8 @@
 -- Minecraft 1.7.10 / ImmersiveEngineering 0.7.7
 -- OpenComputers 1.8.10
 --
--- Requires an OpenComputers Adapter on one of the Diesel Generator's
--- redstone/control positions. IE exposes the component as:
---     ie_diesel_generator
+-- Requires an OpenComputers Adapter on a Diesel Generator control/redstone position.
+-- Component: ie_diesel_generator
 --
 -- Controls:
 --   A = automatic mode
@@ -16,35 +15,36 @@
 local component = require("component")
 local event = require("event")
 local computer = require("computer")
-local keyboard = require("keyboard")
 
 local gpu = component.gpu
 local gen = component.ie_diesel_generator
 
 if not gen then
-  error("Kein ie_diesel_generator gefunden. Adapter an den roten Steueranschluss setzen.")
+  error("Kein ie_diesel_generator gefunden. Adapter an den Steueranschluss setzen.")
 end
 
 local W, H = 132, 38
-local version = "1.0.0"
+local version = "2.0.0"
 
+-- OpenComputers 16/256-color friendly palette.
 local C = {
-  bg = 0x0B0F14,
-  panel = 0x151B22,
-  panel2 = 0x1C242D,
-  border = 0x34404C,
-  blue = 0x3B82F6,
-  cyan = 0x22D3EE,
-  green = 0x22C55E,
-  lime = 0x84CC16,
-  yellow = 0xFACC15,
-  orange = 0xF97316,
-  red = 0xEF4444,
-  purple = 0xA855F7,
+  bg = 0x080B10,
+  panel = 0x111722,
+  panel2 = 0x182131,
+  border = 0x334155,
+  blue = 0x2563EB,
+  cyan = 0x06B6D4,
+  green = 0x16A34A,
+  lime = 0x65A30D,
+  yellow = 0xEAB308,
+  orange = 0xEA580C,
+  red = 0xDC2626,
+  purple = 0x9333EA,
   white = 0xF8FAFC,
   text = 0xCBD5E1,
   muted = 0x64748B,
-  dark = 0x111827
+  dark = 0x030712,
+  black = 0x000000
 }
 
 local mode = "AUTO"
@@ -71,14 +71,62 @@ local function safeCall(fn, ...)
   return false, nil, nil, a
 end
 
+local function fill(x, y, w, h, bg)
+  gpu.setBackground(bg)
+  gpu.fill(x, y, w, h, " ")
+end
+
+local function text(x, y, s, fg, bg)
+  gpu.setForeground(fg or C.text)
+  if bg then gpu.setBackground(bg) end
+  gpu.set(x, y, tostring(s))
+end
+
+local function centered(y, s, fg, bg)
+  s = tostring(s)
+  local x = math.max(1, math.floor((W - #s) / 2) + 1)
+  text(x, y, s, fg, bg)
+end
+
+local function box(x, y, w, h, title, accent)
+  fill(x, y, w, h, C.panel)
+  gpu.setBackground(C.panel)
+  gpu.setForeground(C.border)
+  gpu.fill(x, y, w, 1, "─")
+  gpu.fill(x, y + h - 1, w, 1, "─")
+  gpu.fill(x, y, 1, h, "│")
+  gpu.fill(x + w - 1, y, 1, h, "│")
+  gpu.setBackground(accent or C.blue)
+  gpu.fill(x, y, 1, h, " ")
+  text(x + 3, y, " " .. title .. " ", accent or C.cyan, C.panel)
+end
+
+local function solidBar(x, y, w, pct, fg, bg)
+  pct = clamp(pct, 0, 100)
+  fill(x, y, w, 3, bg or C.dark)
+  local inner = w - 2
+  local filled = math.floor(inner * pct / 100 + 0.5)
+  if filled > 0 then
+    gpu.setBackground(fg)
+    gpu.fill(x + 1, y, filled, 3, " ")
+  end
+end
+
+local function segmentedBar(x, y, segments, pct, fg, bg)
+  pct = clamp(pct, 0, 100)
+  local filled = math.floor(segments * pct / 100 + 0.5)
+  for i = 1, segments do
+    gpu.setBackground(i <= filled and fg or bg)
+    gpu.fill(x + (i - 1) * 2, y, 1, 1, " ")
+  end
+end
+
 local function getTank()
-  local ok, info, err = safeCall(gen.getTankInfo)
+  local ok, info, _, err = safeCall(gen.getTankInfo)
   if not ok then
     return 0, 0, "--", tostring(err)
   end
 
-  -- IE 0.7.x returns the FluidTankInfo table directly.
-  -- The fallback also accepts an array in case another OC/IE build wraps it.
   local tank = info
   if type(info) == "table" and info[1] and type(info[1]) == "table" then
     tank = info[1]
@@ -127,7 +175,7 @@ local function update()
   if err then lastError = err end
 
   if mode == "AUTO" and capacity > 0 then
-    local pct = (amount / capacity) * 100
+    local pct = amount / capacity * 100
     if pct <= low and enabled then
       setGenerator(false)
     elseif pct >= high and not enabled then
@@ -138,45 +186,9 @@ local function update()
   lastUpdate = computer.uptime()
 end
 
-local function fill(x, y, w, h, bg)
-  gpu.setBackground(bg)
-  gpu.fill(x, y, w, h, " ")
-end
-
-local function text(x, y, s, fg, bg)
-  gpu.setForeground(fg or C.text)
-  if bg then gpu.setBackground(bg) end
-  gpu.set(x, y, tostring(s))
-end
-
-local function panel(x, y, w, h, title)
-  fill(x, y, w, h, C.panel)
-  gpu.setForeground(C.border)
-  gpu.setBackground(C.panel)
-  gpu.fill(x, y, w, 1, "─")
-  gpu.fill(x, y + h - 1, w, 1, "─")
-  gpu.fill(x, y, 1, h, "│")
-  gpu.fill(x + w - 1, y, 1, h, "│")
-  text(x + 2, y, " " .. title .. " ", C.cyan, C.panel)
-end
-
-local function bar(x, y, w, pct, fg)
-  pct = clamp(pct, 0, 100)
-  local n = math.floor((w - 2) * pct / 100 + 0.5)
-  gpu.setBackground(C.dark)
-  gpu.fill(x, y, w, 1, " ")
-  if n > 0 then
-    gpu.setBackground(fg)
-    gpu.fill(x + 1, y, n, 1, " ")
-  end
-  gpu.setBackground(C.panel)
-  gpu.setForeground(C.muted)
-  gpu.set(x + w + 1, y, string.format("%5.1f%%", pct))
-end
-
-local function center(y, s, fg, bg)
-  local x = math.max(1, math.floor((W - #s) / 2) + 1)
-  text(x, y, s, fg, bg)
+local function setMode(newMode)
+  mode = newMode
+  if mode == "AUTO" then update() end
 end
 
 local function draw()
@@ -185,66 +197,64 @@ local function draw()
   gpu.setForeground(C.white)
   gpu.fill(1, 1, W, H, " ")
 
+  -- Header
   gpu.setBackground(C.blue)
-  gpu.fill(1, 1, W, 3, " ")
-  center(2, "IMMERSIVE ENGINEERING  •  DIESEL GENERATOR", C.white, C.blue)
-  center(3, "OpenComputers Control System  v" .. version, 0xDBEAFE, C.blue)
-
-  panel(2, 5, 61, 14, "GENERATOR STATUS")
-  panel(65, 5, 65, 14, "DIESEL TANK")
-
-  local stateText = active and "RUNNING" or (enabled and "STARTING / IDLE" or "STOPPED")
-  local stateColor = active and C.green or (enabled and C.yellow or C.red)
-  text(5, 8, "STATUS", C.muted)
-  text(5, 10, stateText, stateColor)
-
-  text(5, 13, "CONTROL", C.muted)
-  text(18, 13, mode, mode == "AUTO" and C.cyan or C.orange)
-  text(5, 15, "COMMAND", C.muted)
-  text(18, 15, enabled and "ENABLED" or "DISABLED", enabled and C.green or C.red)
+  gpu.fill(1, 1, W, 4, " ")
+  centered(2, "IMMERSIVE ENGINEERING  •  DIESEL GENERATOR", C.white, C.blue)
+  centered(3, "OPENCOMPUTERS CONTROL PANEL  v" .. version, 0xBFDBFE, C.blue)
+  centered(4, "MC 1.7.10  •  IE 0.7.7  •  OC 1.8.10", 0xDBEAFE, C.blue)
 
   local pct = capacity > 0 and amount / capacity * 100 or 0
-  local barColor = pct <= low and C.red or (pct < high and C.yellow or C.green)
-  text(68, 8, "FUEL LEVEL", C.muted)
-  bar(68, 10, 47, pct, barColor)
-  text(68, 13, "FLUID", C.muted)
-  text(82, 13, fluidName, C.white)
-  text(68, 15, "AMOUNT", C.muted)
-  text(82, 15, string.format("%d / %d mB", amount, capacity), C.white)
-  text(68, 17, "THRESHOLDS", C.muted)
-  text(82, 17, string.format("STOP %d%%  /  START %d%%", low, high), C.text)
+  local fuelColor = pct <= low and C.red or (pct < high and C.yellow or C.green)
+  local stateText = active and "RUNNING" or (enabled and "ENABLED / IDLE" or "STOPPED")
+  local stateColor = active and C.green or (enabled and C.yellow or C.red)
 
-  panel(2, 21, 128, 9, "AUTOMATIC CONTROL")
-  text(5, 24, "Mode", C.muted)
-  text(17, 24, mode, mode == "AUTO" and C.cyan or C.orange)
-  text(5, 26, "AUTO", C.cyan)
-  text(17, 26, "starts at " .. high .. "% and stops at " .. low .. "%", C.text)
-  text(66, 26, "Manual", C.orange)
-  text(78, 26, "M = ON    O = OFF", C.text)
+  -- Main status panel
+  box(2, 6, 62, 14, "GENERATOR STATUS", stateColor)
+  text(6, 8, "CURRENT STATE", C.muted)
+  text(6, 10, "●  " .. stateText, stateColor)
+  text(6, 13, "CONTROL MODE", C.muted)
+  text(22, 13, mode, mode == "AUTO" and C.cyan or C.orange)
+  text(6, 15, "COMMAND", C.muted)
+  text(22, 15, enabled and "● ENABLED" or "● DISABLED", enabled and C.green or C.red)
+  text(6, 17, "COMPONENT", C.muted)
+  text(22, 17, "ie_diesel_generator", C.purple)
+  segmentedBar(6, 19, 25, active and 100 or (enabled and 45 or 0), stateColor, C.dark)
 
-  panel(2, 32, 128, 5, "CONTROLS")
-  text(5, 34, "[A]", C.cyan)
-  text(10, 34, "AUTO", C.text)
-  text(25, 34, "[M]", C.green)
-  text(30, 34, "ON", C.text)
-  text(43, 34, "[O]", C.red)
-  text(48, 34, "OFF", C.text)
-  text(63, 34, "[R]", C.yellow)
-  text(68, 34, "REFRESH", C.text)
-  text(88, 34, "[Q]", C.red)
-  text(93, 34, "QUIT", C.text)
+  -- Fuel panel
+  box(66, 6, 64, 14, "DIESEL TANK", fuelColor)
+  text(70, 8, "FUEL LEVEL", C.muted)
+  text(115, 8, string.format("%5.1f%%", pct), fuelColor)
+  solidBar(70, 10, 54, pct, fuelColor, C.dark)
+  text(70, 14, "FLUID", C.muted)
+  text(84, 14, fluidName, C.white)
+  text(70, 16, "AMOUNT", C.muted)
+  text(84, 16, string.format("%d / %d mB", amount, capacity), C.white)
+  text(70, 18, "LEVEL", C.muted)
+  text(84, 18, pct <= low and "CRITICAL" or (pct < high and "LOW" or "GOOD"), fuelColor)
+
+  -- Automatic control
+  box(2, 22, 128, 7, "AUTOMATIC CONTROL", C.cyan)
+  text(6, 24, "STOP", C.muted)
+  text(17, 24, low .. "%", C.red)
+  segmentedBar(22, 24, 35, low, C.red, C.dark)
+  text(64, 24, "START", C.muted)
+  text(76, 24, high .. "%", C.green)
+  segmentedBar(81, 24, 35, high, C.green, C.dark)
+  text(6, 27, "AUTO: generator OFF at <= " .. low .. "%   |   ON at >= " .. high .. "%", C.text)
+
+  -- Controls
+  box(2, 31, 128, 6, "CONTROLS", C.blue)
+  text(6, 33, "[A]", C.cyan);   text(11, 33, "AUTO", C.text)
+  text(27, 33, "[M]", C.green);  text(32, 33, "MANUAL ON", C.text)
+  text(51, 33, "[O]", C.red);    text(56, 33, "MANUAL OFF", C.text)
+  text(80, 33, "[R]", C.yellow); text(85, 33, "REFRESH", C.text)
+  text(103, 33, "[Q]", C.red);   text(108, 33, "QUIT", C.text)
 
   if lastError then
-    text(5, 36, "ERROR: " .. lastError, C.red)
+    text(6, 36, "ERROR: " .. lastError, C.red)
   else
-    text(5, 36, "Last update: " .. string.format("%.1fs", computer.uptime() - lastUpdate), C.muted)
-  end
-end
-
-local function setMode(newMode)
-  mode = newMode
-  if mode == "AUTO" then
-    update()
+    text(6, 36, "● ONLINE   •   Last update " .. string.format("%.1fs", computer.uptime() - lastUpdate) .. " ago", C.muted)
   end
 end
 
@@ -254,10 +264,6 @@ draw()
 while running do
   local e = {event.pull(0.5)}
   if e[1] == "key_down" then
-    local code = e[4]
-    if keyboard.isKeyDown(code) then
-      -- no-op: handled below by character code where available
-    end
     local char = e[3]
     if char == string.byte("a") or char == string.byte("A") then
       setMode("AUTO")
@@ -280,9 +286,8 @@ while running do
   draw()
 end
 
--- Leave the generator disabled when the control program exits.
 setGenerator(false)
-gpu.setBackground(0x000000)
-gpu.setForeground(0xFFFFFF)
+gpu.setBackground(C.black)
+gpu.setForeground(C.white)
 gpu.fill(1, 1, W, H, " ")
-center(math.floor(H / 2), "Diesel Generator Control beendet.", C.text, 0x000000)
+centered(math.floor(H / 2), "Diesel Generator Control beendet.", C.text, C.black)
