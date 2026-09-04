@@ -10,6 +10,14 @@ Aktueller Stand: BULDACITY/2 für Minecraft 1.7.10 + OpenComputers.
                       Network.lua
                            │
                     BULDACITY/2 :4242
+                           │
+                 Wireless / Wired Network
+                           │
+                    ┌──────┴──────┐
+                    │ OpenComputers│
+                    │ Relay / AP   │
+                    └──────┬──────┘
+                           │
              ┌─────────────┼─────────────┐
              │             │             │
           CLIENT        CLIENT        CLIENT
@@ -18,6 +26,8 @@ Aktueller Stand: BULDACITY/2 für Minecraft 1.7.10 + OpenComputers.
 ```
 
 Es gibt genau **einen zentralen BULDACITY-Server**. Die Mod-Logik bleibt auf den jeweiligen normalen Controller-PCs.
+
+OpenComputers-Relays und Access Points werden auf Netzwerkebene verarbeitet. Die Lua-Controller müssen keinen eigenen Relay-Treiber installieren: Eine über Relay/Access Point weitergeleitete `modem_message`-Nachricht wird von `Network.lua` normal verarbeitet. Bei Funkempfang kann OpenComputers zusätzlich die Entfernung im `modem_message`-Event liefern.
 
 ## 2. Benötigte Dateien
 
@@ -74,7 +84,29 @@ dofile("/home/BuldacityOS_Tier3.lua")
 - keine Whitelist
 - keine UUID-Rollenverwaltung
 
-## 6. Remote-PC
+## 6. Wireless + Relay / Access Point
+
+Die gemeinsame `Network.lua` übernimmt die Wireless-Konfiguration für Wireless Network Cards. Beim Start wird die maximale vorgesehene BULDACITY-Funkstärke versucht; die tatsächlich vom OpenComputers-Build akzeptierte Stärke wird anschließend ausgelesen.
+
+Für große Anlagen kann der Netzwerkweg über OpenComputers Relay oder Access Point geführt werden:
+
+```text
+Wireless Card
+      ))))
+   Relay / AP
+      │
+   Network
+      │
+Wireless Card
+```
+
+Ein Relay/Access Point muss dabei physisch korrekt mit den jeweiligen Netzwerkseiten verbunden sein. Das Weiterleiten selbst erledigt OpenComputers; BULDACITY sendet und empfängt weiterhin über den normalen Modem-Port `4242`.
+
+Die `Network.lua` markiert Clients als `relay=true` und überträgt zusätzlich Funkstatus, Signalstärke und die zuletzt erkannte Funkentfernung. Eine Relay-Verbindung ist dabei transparent und benötigt keinen separaten Lua-Relay-Prozess.
+
+OpenComputers dokumentiert, dass Wireless Network Cards für Funkpakete eine gesetzte Signalstärke benötigen. Relays/Access Points können Netzwerk-Nachrichten zwischen Netzwerken weiterleiten. citeturn0search2turn0search6
+
+## 7. Remote-PC
 
 Nach der Anmeldung kann der Tier-3-Desktop einen Client auswählen und dessen Oberfläche remote bedienen.
 
@@ -87,7 +119,7 @@ Nach der Anmeldung kann der Tier-3-Desktop einen Client auswählen und dessen Ob
 
 Die eigentliche Maschinenlogik läuft weiterhin auf dem Client-PC.
 
-## 7. Big Reactors
+## 8. Big Reactors
 
 Der lokale Controller `ReactorBigReactors043A_Touch_Responsive.lua` besitzt getrennte Seiten für:
 - CORE
@@ -96,25 +128,34 @@ Der lokale Controller `ReactorBigReactors043A_Touch_Responsive.lua` besitzt getr
 
 Die Network-Version überträgt Reaktor-Telemetrie an die Zentrale. Der zentrale Desktop besitzt eine eigene REACTOR-Ansicht.
 
-## 8. Verbindung testen
+## 9. Verbindung testen
 
 1. Zentrale starten.
 2. Network Card/Wireless Card prüfen.
-3. Port `4242` verwenden.
-4. Nur **einen** Client starten.
-5. Warten, bis er unter `DEVICES` erscheint.
-6. Client auswählen.
-7. `REMOTE` testen.
-8. Erst danach weitere Clients hinzufügen.
+3. Bei Wireless die Signalstärke prüfen.
+4. Optional Relay/Access Point zwischen den Netzabschnitten einsetzen.
+5. Port `4242` verwenden.
+6. Nur **einen** Client starten.
+7. Warten, bis er unter `DEVICES` erscheint.
+8. Client auswählen.
+9. `REMOTE` testen.
+10. Erst danach weitere Clients hinzufügen.
 
-## 9. Fehlerbehebung
+## 10. Fehlerbehebung
 
 ### Client nicht sichtbar
 - Network Card/Wireless Network Card prüfen.
 - `Network.lua` vorhanden?
 - richtiger Network-Controller gestartet?
-- Client in Reichweite?
+- Client in Reichweite oder über Relay/Access Point verbunden?
 - Port `4242`?
+
+### Wireless funktioniert nicht
+- Wireless Network Card vorhanden?
+- Signalstärke größer als `0`?
+- Energieversorgung ausreichend?
+- Relay/Access Point korrekt angeschlossen?
+- Netzwerk-Port `4242` geöffnet?
 
 ### Datei nicht gefunden
 Network-Wrapper und Autostart suchen Programme robust in `/home`, `/` und über die OpenOS-Shell-Auflösung. Controller sollten daher bevorzugt in `/home` installiert werden.
@@ -127,7 +168,7 @@ Network-Wrapper und Autostart suchen Programme robust in `/home`, `/` und über 
 ### Komponenten fehlen
 Immer zuerst `component.list()` bzw. den jeweiligen Controller-Scan verwenden. Nur tatsächlich exponierte OC-Methoden dürfen als verfügbar betrachtet werden.
 
-## 10. Autostart
+## 11. Autostart
 
 Auf jedem PC kann `BuldacityAutoStart.lua` als `/home/autorun.lua` installiert werden.
 
