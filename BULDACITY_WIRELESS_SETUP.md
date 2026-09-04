@@ -1,6 +1,4 @@
-# BULDACITY Wireless Setup
-
-Aktuelle Anleitung für das Buldacity/2-Netzwerk in OpenComputers 1.7.10.
+# BULDACITY Wireless Setup – Schritt für Schritt
 
 ## 1. Voraussetzungen
 
@@ -8,144 +6,115 @@ Aktuelle Anleitung für das Buldacity/2-Netzwerk in OpenComputers 1.7.10.
 - Forge `10.13.4.1614`
 - OpenComputers für 1.7.10
 - Tier-3-Computer als Zentrale
-- Wireless Network Card oder Network Card im Client
+- Network Card oder Wireless Network Card
 - Port `4242`
 
-Es gibt bewusst **keine Whitelist, keine UUID-Rollen und keine Access-Control-Datei**.
+Der aktuelle Aufbau verwendet **BULDACITY/2**. Es gibt keine alte BULDACITY/1-Security-Struktur, keine Whitelist und keine UUID-Rollenverwaltung.
 
-## 2. Zentrale
-
-Der Tier-3-Rechner benötigt:
+## 2. Zentrale aufbauen
 
 ```text
-Tier-3 Computer
+Tier-3
+├── CPU
+├── RAM
+├── Speicher
 ├── GPU
 ├── Screen
 ├── Keyboard
-└── Wireless Network Card
+└── Network/Wireless Network Card
 ```
+
+Nach `/home` kopieren:
+- `Network.lua`
+- `BuldacityOS_Tier3.lua`
+- `BuldacityUI.lua`
+- `BuldacityComponentDashboard.lua`
 
 Start:
 
 ```lua
-dofile("BuldacityOS_Tier3.lua")
+dofile("/home/BuldacityOS_Tier3.lua")
 ```
 
-## 3. Client
-
-Der Controller-Computer benötigt mindestens:
+## 3. Client aufbauen
 
 ```text
-OpenComputers Computer
+Controller-PC
 ├── CPU
 ├── RAM
 ├── Speicher
-└── Wireless Network Card
+├── GPU/Screen (bei GUI-Controller)
+└── Network/Wireless Network Card
 ```
 
-Netzwerkdienst:
+Nach `/home` kopieren:
+- `Network.lua`
+- passender `*Network*.lua` Controller
+- passender Mod-Controller
 
-```lua
-dofile("BuldacityNetworkClient.lua")
-```
+## 4. Funkverbindung
 
-Danach kann der gewünschte Normal-, Modern- oder Big-Reactors-Controller gestartet werden.
-
-## 4. Funknetz
-
-`BuldacityWireless.lua` verwendet die echte OpenComputers-Modem-Schnittstelle.
-
-Der Standard ist:
+Standard:
 
 ```text
 Protocol: BULDACITY/2
 Port:     4242
 ```
 
-Die Wireless Card muss Reichweite zum Tier-3-Rechner haben. Für große Anlagen den Tier-3-Rechner möglichst zentral platzieren.
+Die Wireless Cards müssen sich erreichen können. Bei großen Anlagen die Zentrale möglichst zentral platzieren.
 
-## 5. Buldacity/2
+## 5. Ersttest
 
-Pakete verwenden:
+1. Zentrale starten.
+2. Nur einen Client einschalten.
+3. Network-Controller starten.
+4. Warten, bis der Client unter `DEVICES` erscheint.
+5. Client auswählen.
+6. `REMOTE` öffnen.
+7. Touch/Tastatur testen.
+8. Erst danach weitere Controller anschließen.
 
-```lua
-{
-  protocol = "BULDACITY/2",
-  kind = "...",
-  sender = "...",
-  time = ...,
-  session = ...,
-  data = {}
-}
-```
+## 6. Autostart
 
-Nur Pakete mit dem aktuellen Protokoll werden von `BuldacityWireless.valid()` akzeptiert.
+`BuldacityAutoStart.lua` kann als `/home/autorun.lua` verwendet werden.
 
-## 6. Controller
-
-Die vorhandenen Controller werden nicht durch eine zweite Netzwerk-Implementierung ersetzt.
-
-Es bleiben:
-
-- Normal-Dateien
-- Modern-Dateien
-- `ReactorBigReactors043A_Touch_Responsive.lua`
-
-Der gemeinsame Netzwerkdienst übernimmt Anmeldung, Heartbeat und Remote-Kommunikation.
-
-## 7. Remote-Bildschirm
-
-Der Tier-3-Desktop kann einen ausgewählten Client als Remote Interface darstellen.
-
-Der Client überträgt:
-
-- Bildschirmzeilen
-- Tastatureingaben
-- Touch
-- Scroll
-
-Die Maschinenlogik bleibt lokal im jeweiligen Controller.
-
-## 8. Big Reactors
-
-Für Big Reactors 0.4.3A wird verwendet:
+Server-Konfiguration:
 
 ```text
-ReactorBigReactors043A_Touch_Responsive.lua
+ROLE=SERVER
 ```
 
-Der Controller erkennt `br_reactor` und `br_turbine` direkt und bietet Touch-Steuerung, Control-Rods, Energie, Brennstoff, Temperatur, AUTO und Turbinen-Telemetrie.
+Client-Konfiguration, z. B. Big Reactors:
 
-## 9. Installation prüfen
+```text
+ROLE=CLIENT
+CLIENT=BigReactors
+```
 
-Auf dem Tier-3-Rechner:
+Der Autostart sucht Programme robust in `/home`, `/` und über die OpenOS-Pfadauflösung.
+
+## 7. Big Reactors
+
+Der lokale Big-Reactors-Controller unterstützt `br_reactor` und `br_turbine`. Die Oberfläche enthält CORE, RODS und TURBINE.
+
+## 8. Diagnose
+
+Prüfen:
 
 ```lua
-dofile("BuldacityNetworkInstall.lua")
+component.list("modem")
+component.list("br_reactor")
+component.list("br_turbine")
 ```
 
-Der Installer prüft die aktuelle Netzwerkbasis und den Big-Reactors-Controller.
+Danach den Controller-Scan verwenden.
 
-## 10. Diagnose
+## 9. Häufige Fehler
 
-```lua
-dofile("BuldacityNetworkStatus.lua")
-```
+**Client fehlt:** Karte, Reichweite, Port, `Network.lua` und Network-Controller prüfen.
 
-Prüfe anschließend:
+**Datei nicht gefunden:** Datei nach `/home` kopieren und den Network-Wrapper/Autostart verwenden.
 
-1. Modem erkannt
-2. Port `4242`
-3. Protokoll `BULDACITY/2`
-4. Client im Tier-3-Desktop sichtbar
-5. Remote Interface erreichbar
+**Remote leer:** Client-GPU/Screen und laufenden Network-Controller prüfen.
 
-## 11. Typische Fehler
-
-**Client fehlt:** Wireless Card, Reichweite, Port oder Clientdienst prüfen.
-
-**Reactor fehlt:** Big Reactors 0.4.3A und `br_reactor` prüfen.
-
-**Remote leer:** Client muss einen OpenComputers Screen/GPU besitzen und den Netzwerkdienst ausführen.
-
-**Alte Anleitung erwähnt BULDACITY/1:** Diese Information ist veraltet und gehört nicht mehr zum aktuellen Setup.
+**Komponente fehlt:** Adapter/Driver bzw. direkte OC-Komponente prüfen. Ein Adapter garantiert keine Mod-API, wenn kein passender Driver vorhanden ist.
