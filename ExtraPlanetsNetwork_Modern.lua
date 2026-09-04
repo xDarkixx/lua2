@@ -1,7 +1,16 @@
--- Network controller for ExtraPlanets
-local ok,net=pcall(require,"Network")
-if ok and net and net.startClient then pcall(net.startClient,"ExtraPlanets",{controller="ExtraPlanets_Modern.lua"}) end
-local component=require("component")
-local event=require("event")
-local term=require("term")
-while true do term.clear();term.setCursor(1,1);print("=== BULDACITY // EXTRAPLANETS NETWORK ===");print("Live OC discovery | Galacticraft dependency");print("");local n=0;for a,t in component.list() do local s=string.lower(t);if s:find("planet") or s:find("galactic") or s:find("rocket") or s:find("oxygen") or s:find("network") then n=n+1;print(string.format("%02d %-24s %s",n,t,a))end end;print("");print("Detected components: "..n);print("R = rescan | Q = quit");local _,_,c=event.pull("key_down");if c==16 or c==81 or c==113 then break end end
+-- ExtraPlanetsNetwork_Modern.lua
+-- BULDACITY/2 network client wrapper for ExtraPlanets_Modern.lua.
+-- The Modern controller remains unchanged; this file only adds the shared client bridge.
+
+local Network=require("Network")
+local ok,mode=Network.startClient("ExtraPlanets // Command Center",{
+  controller="ExtraPlanets_Modern.lua",
+  mod="ExtraPlanets",
+  version="2.1.4",
+  network=true
+})
+if not ok then
+  io.stderr:write("BULDACITY Network unavailable: "..tostring(mode).."\n")
+end
+
+dofile("/ExtraPlanets_Modern.lua")
