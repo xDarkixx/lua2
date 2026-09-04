@@ -1,6 +1,6 @@
 -- LogisticsPipes_Modern.lua
 -- Buldacity controller for Logistics Pipes 0.9.3.132 / Minecraft 1.7.10.
--- Uses only OpenComputers component APIs that are actually exposed at runtime.
+-- Component discovery is refreshed continuously so added/removed OC devices appear automatically.
 local component=require("component")
 local computer=require("computer")
 local event=require("event")
@@ -38,16 +38,37 @@ local function allComponents()
   local ok,methods=pcall(component.methods,addr)
   table.insert(out,{addr=addr,typ=tostring(typ),methods=ok and methods or {}})
  end
+ table.sort(out,function(a,b) return a.typ<b.typ end)
  return out
 end
+
 local comps=findLP(); local all=allComponents(); local selected=1; local page="HOME"; local msg="READY"
+local lastScan=0
+local SCAN_INTERVAL=2
 local function selectedComp() return comps[selected] end
+
+-- Rebuild both lists from the live OC component bus. The current LP selection is
+-- preserved by address when possible, so hot-plugging does not jump to another device.
+local function refreshComponents(force)
+ local now=computer.uptime()
+ if not force and now-lastScan<SCAN_INTERVAL then return false end
+ lastScan=now
+ local oldAddr=selectedComp() and selectedComp().addr or nil
+ comps=findLP()
+ all=allComponents()
+ selected=1
+ if oldAddr then
+  for i,c in ipairs(comps) do if c.addr==oldAddr then selected=i break end end
+ end
+ return true
+end
+
 local function drawHome()
  clear(); title("COMMAND")
  line(3,"LP target: "..(selectedComp() and (selectedComp().typ.." @"..selectedComp().addr:sub(1,8)) or "NOT FOUND"))
- line(4,"OC components: "..#all.."   LP candidates: "..#comps)
+ line(4,"OC components: "..#all.."   LP candidates: "..#comps.."   AUTO-SCAN: "..SCAN_INTERVAL.."s")
  line(6,"REAL-TIME COMPONENT DISCOVERY")
- line(8,"The controller never invents an LP method. It shows methods exposed by the installed OC integration.")
+ line(8,"The component list is rebuilt from component.list() automatically while this screen runs.")
  line(10,"Pages: NETWORK  COMPONENTS  API  INVENTORY  CONTROL")
  buttons({{"NETWORK","NETWORK"},{"COMPONENTS","COMPONENTS"},{"API","API"},{"INVENTORY","INVENTORY"},{"CONTROL","CONTROL"}},H-3)
 end
@@ -58,6 +79,7 @@ local function drawComponents()
   if y>H-3 then break end
   line(y,string.format("%2d  %-20s  %s",i,fit(c.typ,20),c.addr:sub(1,12))); y=y+1
  end
+ line(H-4,"LIVE LIST • rescans automatically every "..SCAN_INTERVAL.." seconds")
  buttons({{"HOME","HOME"},{"REFRESH","REFRESH"},{"API","API"}},H-3)
 end
 local function drawAPI()
@@ -105,9 +127,14 @@ end
 local function draw()
  if page=="HOME" then drawHome() elseif page=="COMPONENTS" then drawComponents() elseif page=="API" then drawAPI() elseif page=="INVENTORY" then drawInventory() elseif page=="NETWORK" then drawNetwork() else drawControl() end
 end
-local function refresh() comps=findLP(); all=allComponents(); if selected>#comps then selected=1 end; draw() end
+local function refresh()
+ refreshComponents(true)
+ draw()
+end
 gpu.setBackground(0x080C14); gpu.setForeground(0x66FFFF); draw()
 while true do
+ local changed=refreshComponents(false)
+ if changed then draw() end
  local e={event.pull(1)}
  if e[1]=="touch" then
   local x,y=e[3],e[4]
