@@ -1,15 +1,17 @@
 -- BuldacityAutoStart.lua
 -- Automatic startup for BULDACITY/2 after an OpenComputers reboot.
 -- Install this file as /home/autorun.lua on the computer.
+-- ALL BULDACITY Lua programs are loaded from /home.
 -- Role is selected by /home/buldacity-role.cfg:
---   SERVER  -> starts BuldacityOS_Tier3.lua
---   CLIENT  -> starts the configured Network client controller
+--   SERVER  -> starts /home/BuldacityOS_Tier3.lua
+--   CLIENT  -> starts the configured /home Network client controller
 
 local computer=require("computer")
 local filesystem=require("filesystem")
 local shell=require("shell")
 
-local ROLE_FILE="/home/buldacity-role.cfg"
+local HOME="/home/"
+local ROLE_FILE=HOME.."buldacity-role.cfg"
 local DEFAULT_ROLE="CLIENT"
 
 local CLIENTS={
@@ -62,13 +64,13 @@ local function readConfig()
   return role,client
 end
 
--- Resolve BULDACITY programs in both normal OpenOS locations.
--- /home is the recommended installation directory; / is kept for
--- compatibility with installations that place scripts at the root.
+-- BULDACITY is intentionally /home-only. This removes ambiguous
+-- shell.resolve()/require() locations and prevents "file not found" errors
+-- caused by mixing /, /usr/bin and /home installations.
 local function findProgram(path)
-  local candidates={"/home/"..path,"/"..path,"/usr/bin/"..path}
-  for i=1,#candidates do
-    if filesystem.exists(candidates[i]) and not filesystem.isDirectory(candidates[i]) then return candidates[i] end
+  local resolved=HOME..path
+  if filesystem.exists(resolved) and not filesystem.isDirectory(resolved) then
+    return resolved
   end
   return nil
 end
@@ -76,21 +78,16 @@ end
 local function start(path)
   local resolved=findProgram(path)
   if not resolved then
-    io.stderr:write("BULDACITY AUTOSTART: missing "..path.." (checked /home, / and /usr/bin)\n")
+    io.stderr:write("BULDACITY AUTOSTART: missing /home/"..path.."\n")
     return false
   end
 
-  -- Network wrappers use shell.resolve() for their controller files.
-  -- Run them with the working directory of the wrapper so root and /home
-  -- installations resolve their companion files consistently.
-  local previous=nil
-  pcall(function() previous=shell.getWorkingDirectory() end)
-  local parent=filesystem.path(resolved)
-  if parent and filesystem.exists(parent) then pcall(function() shell.setWorkingDirectory(parent) end) end
+  -- Every wrapper and controller is executed with /home as its working
+  -- directory. OpenOS package.path already supports ./?.lua, so
+  -- require("Network") resolves /home/Network.lua as well.
+  pcall(function() shell.setWorkingDirectory("/home") end)
 
   local ok,err=xpcall(function() dofile(resolved) end,debug.traceback)
-
-  if previous and filesystem.exists(previous) then pcall(function() shell.setWorkingDirectory(previous) end) end
   if not ok then
     io.stderr:write("BULDACITY AUTOSTART FAILED: "..tostring(err).."\n")
     return false
