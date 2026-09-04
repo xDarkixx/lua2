@@ -7,6 +7,7 @@
 
 local computer=require("computer")
 local filesystem=require("filesystem")
+local shell=require("shell")
 
 local ROLE_FILE="/home/buldacity-role.cfg"
 local DEFAULT_ROLE="CLIENT"
@@ -65,9 +66,9 @@ end
 -- /home is the recommended installation directory; / is kept for
 -- compatibility with installations that place scripts at the root.
 local function findProgram(path)
-  local candidates={"/home/"..path,"/"..path,path}
+  local candidates={"/home/"..path,"/"..path,"/usr/bin/"..path}
   for i=1,#candidates do
-    if filesystem.exists(candidates[i]) then return candidates[i] end
+    if filesystem.exists(candidates[i]) and not filesystem.isDirectory(candidates[i]) then return candidates[i] end
   end
   return nil
 end
@@ -75,10 +76,21 @@ end
 local function start(path)
   local resolved=findProgram(path)
   if not resolved then
-    io.stderr:write("BULDACITY AUTOSTART: missing "..path.." (checked /home and /)\n")
+    io.stderr:write("BULDACITY AUTOSTART: missing "..path.." (checked /home, / and /usr/bin)\n")
     return false
   end
+
+  -- Network wrappers use shell.resolve() for their controller files.
+  -- Run them with the working directory of the wrapper so root and /home
+  -- installations resolve their companion files consistently.
+  local previous=nil
+  pcall(function() previous=shell.getWorkingDirectory() end)
+  local parent=filesystem.path(resolved)
+  if parent and filesystem.exists(parent) then pcall(function() shell.setWorkingDirectory(parent) end) end
+
   local ok,err=xpcall(function() dofile(resolved) end,debug.traceback)
+
+  if previous and filesystem.exists(previous) then pcall(function() shell.setWorkingDirectory(previous) end) end
   if not ok then
     io.stderr:write("BULDACITY AUTOSTART FAILED: "..tostring(err).."\n")
     return false
