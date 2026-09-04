@@ -1,11 +1,21 @@
 -- BuldacityNetworkStatus.lua
-local c=require("component")
-local e=require("event")
-local m=c.modem
-if not m then print("NO MODEM") return end
-m.open(4242)
-print("BULDACITY/1 listening on port 4242")
+-- BULDACITY/2 network diagnostic for OpenComputers 1.7.10.
+local event=require("event")
+local wireless=require("BuldacityWireless")
+local PORT=4242
+local ok,mode=wireless.init(PORT)
+if not ok then print("NO NETWORK MODEM") return end
+print("BULDACITY NETWORK STATUS")
+print("Protocol: BULDACITY/2")
+print("Port: "..PORT)
+print("Mode: "..mode)
+print("Address: "..wireless.address())
+print("Range: "..tostring(wireless.strength() or "N/A"))
+print("Listening...")
 while true do
- local _,_,from,port,dist,p=e.pull("modem_message")
- if port==4242 and type(p)=="table" and p.protocol=="BULDACITY/1" then print(os.date(),from,p.kind,p.data and p.data.name or "?") end
+  local _,_,from,port,distance,p=event.pull("modem_message")
+  if port==PORT and wireless.valid(p) then
+    local name=p.data and p.data.name or "?"
+    print(os.date("%H:%M:%S"),from,p.kind,name,"distance="..tostring(distance))
+  end
 end
