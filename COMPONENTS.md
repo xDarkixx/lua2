@@ -10,48 +10,48 @@ Diese Übersicht erklärt die OpenComputers-Komponenten für die Lua-Programme i
 [Computer] ─── [GPU]
       │
       ├── [Mod-Komponente / Adapter]
-      └── optional [Redstone / Network Card]
+      └── [Network Card / Wireless Network Card]
 ```
 
 ## LogisticsPipes 0.9.3.132
 
 Ziel: `logisticspipes-0.9.3.132.jar`, Minecraft 1.7.10.
 
-### Wichtig zur OpenComputers-Unterstützung
+### OpenComputers-Unterstützung
 
-LogisticsPipes enthält eine eigene OpenComputers-Proxy-Schicht. Der Quellcode zeigt `OpenComputersProxy` und OC-Wrapper-Klassen, die LP-Objekte und deren tatsächlich registrierte Befehle dynamisch bereitstellen.
+LogisticsPipes besitzt eine OpenComputers-Integrationsschicht mit Wrappern für LP-Objekte und deren zur Laufzeit verfügbaren Befehle. Der Buldacity-Controller fragt deshalb die OC-Komponenten und Methoden direkt ab, statt eine feste Adresse oder eine erfundene API anzunehmen.
 
-Bei älteren 1.7.10-Kombinationen gab es Fälle, in denen Logistics Pipes von OpenComputers nur als `bc_pipe` erkannt wurde. Deshalb nimmt der Controller keine erfundene feste LP-Komponentenadresse an.
+Je nach installiertem LP/OpenComputers/BuildCraft-Setup kann ein Pipe-Endpunkt anders erkannt werden; bei älteren Kombinationen wurde beispielsweise `bc_pipe` beobachtet. Der Controller berücksichtigt deshalb dynamische Erkennung.
 
 ### Buldacity Controller
 
 - `LogisticsPipes_Modern.lua` – lokale Touchscreen-Version
 - `LogisticsPipesNetwork_Modern.lua` – Tier-2-Netzwerkversion
 
-Die Oberfläche sucht die zur Laufzeit sichtbaren OpenComputers-Komponenten und zeigt die tatsächlich exponierten Methoden an. Dadurch werden keine nicht vorhandenen LP-Funktionen vorgetäuscht.
-
-### Funktionen des Dashboards
+### Dashboard-Funktionen
 
 - Buldacity Sci-Fi/Neon-Oberfläche
-- LP-Kandidaten erkennen
-- alle sichtbaren OC-Komponenten anzeigen
-- tatsächlich exponierte LP-Methoden anzeigen
-- API-Hilfe/Methodenübersicht
-- Inventar-/Item-relevante Methoden erkennen
+- Live-Komponentenbus
+- automatischer Scan alle 2 Sekunden
+- manuelles Refresh
+- LP-Kandidaten-Erkennung
+- Auswahl eines LP-Endpunkts per Touch
+- Anzeige aller aktuell exponierten OC-Methoden
+- sortierte API-Übersicht
+- API-Methodenzähler
+- Erkennung von Item-, Inventory-, Request- und Crafting-relevanten Methoden
 - Netzwerkstatus
-- Control/API-Seite
-- Touch-Navigation
-- automatische Komponenten-Erkennung
-- Refresh
-- Tier-2-Anbindung an den Buldacity-Server
+- Tier-2/Tier-3-Betrieb
+- sichere Zero-Argument-Probes für nicht mutierende Methoden
+- keine erfundenen Argumente für LP-Befehle
 
-Die LP-OC-Wrapper besitzen `help()` und `helpCommand()` zur Anzeige der tatsächlich verfügbaren Befehle.
+### Komponentenliste
 
-### Anschluss
+Die Liste ist **nicht statisch**. `component.list()` wird während des laufenden Programms regelmäßig neu ausgewertet. Dadurch werden neue Komponenten automatisch aufgenommen und entfernte Komponenten automatisch entfernt. Die Auswahl eines bereits verwendeten LP-Endpunkts wird nach Möglichkeit über dessen Adresse erhalten.
+
+### Anschluss NORMAL
 
 ```text
-NORMAL:
-
 Computer
    │
    ├── GPU ─── Screen/Touchscreen
@@ -59,9 +59,11 @@ Computer
    └── OpenComputers-Verbindung
              │
              └── LogisticsPipes / erreichbarer LP-OC-Anschluss
+```
 
-NETZWERK:
+### Anschluss NETZWERK
 
+```text
 Tier-3 Server
      │
  Wireless Network
@@ -74,49 +76,50 @@ Tier-3 Server
      └──────── weitere Tier-2 Controller
 ```
 
-Die normale LogisticsPipes-Rohrlogik bleibt Sache von LogisticsPipes/BuildCraft. Der Lua-Controller steuert nur das, was die installierte LP-Version tatsächlich über OpenComputers exponiert.
+Die normale LogisticsPipes-Rohrlogik bleibt Sache von LogisticsPipes/BuildCraft. Der Lua-Controller kann nur Funktionen ausführen, die die installierte LP-OC-Integration tatsächlich exponiert.
 
-## Andere Systeme
-
-### Big Reactors
-
-```text
-Computer + GPU + Screen + br_reactor
-                         └─ optional br_turbine
-```
-
-### AE2
-
-```text
-Computer + GPU + Screen + me_controller + AE2 ME Network
-```
-
-### Diesel Generator
-
-```text
-Computer + GPU + Screen + ie_diesel_generator
-```
-
-### RotaryCraft
-
-```text
-Computer + GPU + Screen + optional Redstone
-                         └─ RotaryCraft-Maschine
-```
-
-### PneumaticCraft
+## PneumaticCraft
 
 ```text
 Computer + GPU + Screen + PneumaticCraft-OC-Anschluss
                          └─ Drone / Drone Interface
 ```
 
-## Schnellstart
+## Big Reactors
+
+```text
+Computer + GPU + Screen + br_reactor
+                         └─ optional br_turbine
+```
+
+## AE2
+
+```text
+Computer + GPU + Screen + me_controller + AE2 ME Network
+```
+
+## Diesel Generator
+
+```text
+Computer + GPU + Screen + ie_diesel_generator
+```
+
+## RotaryCraft
+
+```text
+Computer + GPU + Screen + optional Redstone
+                         └─ RotaryCraft-Maschine
+```
+
+## Schnellstart LogisticsPipes
 
 1. OpenComputers-Computer aufstellen.
 2. GPU und Screen anschließen.
-3. Network Card für die Tier-2/Tier-3-Kommunikation installieren.
-4. LogisticsPipes-OC-Anschluss so aufbauen, dass er vom Computer erreichbar ist.
-5. `LogisticsPipes_Modern.lua` für lokal oder `LogisticsPipesNetwork_Modern.lua` für Tier 2 starten.
-6. Auf `COMPONENTS` prüfen, was OpenComputers tatsächlich erkennt.
-7. Auf `API` die vom installierten LP-Build exponierten Methoden prüfen.
+3. Für Tier 2/Tier 3 eine Network Card oder Wireless Network Card installieren.
+4. LogisticsPipes-OC-Anschluss so aufbauen, dass der Computer ihn erreichen kann.
+5. `LogisticsPipes_Modern.lua` lokal oder `LogisticsPipesNetwork_Modern.lua` auf Tier 2 starten.
+6. Auf `COMPONENTS` prüfen, was aktuell erkannt wird.
+7. Einen LP-Kandidaten antippen.
+8. Auf `API` die tatsächlich exponierten Methoden prüfen.
+9. Für sichere parameterlose Status-/Info-Aufrufe kann die Control-Seite einen Zero-Argument-Probe ausführen.
+10. Für Methoden mit Argumenten werden keine erfundenen Parameter gesendet.
