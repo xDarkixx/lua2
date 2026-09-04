@@ -1,1 +1,0 @@
-The Buldacity network layer is available. Modern controllers can be launched through BuldacityControllerLauncher.lua; the Tier-3 desktop uses BULDACITY/1 on port 4242.
