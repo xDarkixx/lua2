@@ -1,6 +1,6 @@
-# Buldacity – komplette Schritt-für-Schritt-Anleitung
+# BULDACITY v9 – komplette Schritt-für-Schritt-Anleitung
 
-Diese Anleitung beschreibt den **aktuellen** Stand von `xDarkixx/lua2` für Minecraft 1.7.10.
+Diese Anleitung beschreibt den aktuellen Stand von `xDarkixx/lua2` für Minecraft 1.7.10 + Forge + OpenComputers.
 
 ## 1. Voraussetzungen
 
@@ -9,17 +9,16 @@ Diese Anleitung beschreibt den **aktuellen** Stand von `xDarkixx/lua2` für Mine
 - OpenComputers für 1.7.10
 - die jeweils benötigten Mod-Versionen
 - für Netzwerk: Network Card oder Wireless Network Card
+- für maximale Grafik: Tier-3 GPU + Screen
 
-## 2. Zuerst die Zentrale bauen
-
-Tier-3-Computer:
+## 2. Zentrale bauen
 
 ```text
 Tier-3 Computer
 ├── CPU
 ├── RAM
 ├── Speicher
-├── GPU
+├── Tier-3 GPU
 ├── Screen
 ├── Keyboard
 └── Network/Wireless Network Card
@@ -29,10 +28,14 @@ Nach `/home` kopieren:
 
 ```text
 Network.lua
-BuldacityOS_Tier3.lua
 BuldacityUI.lua
+BuldacityOS_Tier3.lua
+BuldacityDesktop.lua
+BuldacityComponentServer.lua
 BuldacityComponentDashboard.lua
 BuldacityAutoStart.lua
+BuldacityNetworkTest.lua
+BuldacityWirelessCheck_Modern.lua
 ```
 
 Start:
@@ -41,16 +44,34 @@ Start:
 dofile("/home/BuldacityOS_Tier3.lua")
 ```
 
-## 3. Danach einen Controller-PC bauen
+## 3. Grafische Schicht
 
-Für jeden Mod einen normalen OpenComputers-PC verwenden.
+`BuldacityUI.lua` ist die gemeinsame GPU-Schicht.
+
+Sie stellt unter anderem bereit:
+
+```text
+Panels          Karten
+Buttons         Touch-Flächen
+Balken          große Balken
+Vertikalbalken  LEDs
+Gauges          Status-Badges
+Sparklines      Live-Charts
+Pixel-Icons     Dashboard-Karten
+```
+
+Die Oberfläche passt sich an die verfügbare Screen-Auflösung an.
+
+## 4. Controller-PC bauen
+
+Für jeden Mod einen eigenen OpenComputers-PC verwenden:
 
 ```text
 Controller-PC
 ├── CPU
 ├── RAM
 ├── Speicher
-├── GPU + Screen (für grafische Controller)
+├── GPU + Screen
 └── Network Card/Wireless Network Card
 ```
 
@@ -58,23 +79,47 @@ Nach `/home` kopieren:
 
 ```text
 Network.lua
-passender *Network*.lua Controller
-passender *_Modern.lua Controller
+BuldacityUI.lua
+BuldacityComponentAgent.lua
+passender *Network_Modern.lua
+passender *_Modern.lua
 ```
 
-## 4. Mod-Komponente anschließen
+## 5. Mod-Komponente anschließen
 
-Wenn der Mod bereits eine direkte OC-Komponente bereitstellt, ist kein Adapter nötig.
-
-Wenn es ein unterstützter Mod-Block ohne direkte OC-Komponente ist:
+Direkte OC-Komponente:
 
 ```text
-Computer -> OC-Kabel -> Adapter -> Mod-Block
+Computer → Mod-Komponente
 ```
 
-Danach immer einen Scan durchführen. Ein Adapter stellt nur die Schnittstelle bereit, wenn ein passender Driver vorhanden ist.
+Adapter:
 
-## 5. Controller starten
+```text
+Computer → OC-Kabel → Adapter → Mod-Block
+```
+
+Danach Komponenten prüfen:
+
+```lua
+local component=require("component")
+for address,typ in component.list() do
+  print(address,typ)
+end
+```
+
+## 6. Lokale Mod-GUI testen
+
+Vor dem Netzwerk immer lokal testen:
+
+1. Mod-Komponente anschließen.
+2. passenden `_Modern.lua` Controller starten.
+3. `SCAN` ausführen, falls vorhanden.
+4. Werte prüfen.
+5. Buttons/Touch testen.
+6. erst danach den Network-Wrapper starten.
+
+## 7. Network-Controller starten
 
 Zentrale:
 
@@ -82,192 +127,319 @@ Zentrale:
 dofile("/home/BuldacityOS_Tier3.lua")
 ```
 
-Beispiel Big Reactors Network:
+Client:
 
 ```lua
-dofile("/home/ReactorBigReactors043A_Network.lua")
+dofile("/home/<Mod>Network_Modern.lua")
 ```
 
-Andere Network-Controller funktionieren nach demselben Prinzip.
-
-## 6. Ersten Netzwerktest durchführen
-
-1. Nur die Zentrale starten.
-2. Einen einzigen Controller starten.
-3. Prüfen, ob `NETWORK` eine Verbindung meldet.
-4. `DEVICES` öffnen.
-5. Warten, bis der Client per HELLO/Heartbeat erscheint.
-6. Client auswählen.
-7. `REMOTE` öffnen.
-8. Bildschirm und Eingaben testen.
-9. Erst danach weitere Controller starten.
-
-## 7. Big Reactors 0.4.3A
-
-Dateien:
+Netzwerkparameter:
 
 ```text
-ReactorBigReactors043A_Touch_Responsive.lua
-ReactorBigReactors043A_Network.lua
+BULDACITY/2
+Port 4242
 ```
 
-Lokale Oberfläche:
-- CORE
-- RODS
-- TURBINE
+## 8. Client auf der Zentrale finden
 
-Daten/Steuerung:
-- Reaktorstatus
-- Energie
-- Brennstoff
-- Temperatur
-- Control Rods
-- AUTO
-- Sicherheitsabschaltung
-- Turbinenstatus
-- Rotor Speed
-- Output
-- Fluid Flow
-- Inductor
-
-## 8. Grafisches Design
-
-Die neuen gemeinsamen UI-Bausteine liegen in:
+Auf der Zentrale:
 
 ```text
-BuldacityUI.lua
-BuldacityComponentDashboard.lua
+DESKTOP → SCAN
 ```
 
-Das Design verwendet:
-- einheitliche BULDACITY-Kopfzeile
-- farbige Statusanzeigen
-- Panels
-- Buttons
-- Fortschrittsbalken
-- Touch-Zonen
-- responsive Anpassung an die verfügbare GPU-Auflösung
-- API-/Komponentenansicht
+Danach:
 
-Die aufwendigeren Spezial-Controller behalten ihre mod-spezifische Oberfläche.
+```text
+DEVICES
+```
 
-## 9. Autostart einrichten
+Der Client sollte dort mit Icon, Status, Link-Typ, Entfernung und Component-Anzahl auftauchen.
 
-`BuldacityAutoStart.lua` als `/home/autorun.lua` installieren.
+## 9. Component Explorer
+
+Der Component Agent meldet die angeschlossenen OpenComputers-Components an den Server.
 
 Zentrale:
+
+```lua
+dofile("/home/BuldacityComponentDashboard.lua")
+```
+
+Dort können Component-Typ und Adresse betrachtet werden.
+
+## 10. Remote-PC
+
+1. Client unter `DEVICES` auswählen.
+2. `REMOTE` öffnen.
+3. `REQUEST SCREEN` ausführen.
+4. warten, bis das Bild übertragen wurde.
+5. Remote-Eingabe testen.
+
+Der Client benötigt dafür GPU + Screen.
+
+## 11. Big Reactors
+
+```text
+ReactorBigReactors043A_Network.lua
+ReactorBigReactors043A_Touch_Responsive.lua
+```
+
+Das Dashboard kann gemeldete Werte grafisch darstellen:
+
+```text
+POWER       ███████████████░░
+TEMPERATURE ███████████░░░░░
+FUEL        █████████████░░░
+```
+
+Zusätzlich gibt es eine Live-Kurve für gemeldete Power-Werte.
+
+## 12. Diesel Generator
+
+```text
+DieselGeneratorNetwork_Modern.lua
+DieselGenerator_Modern.lua
+```
+
+Die GUI besitzt grafischen Tankfüllstand, Generatorstatus, AUTO/MANUAL und Component-Adresse.
+
+## 13. AE2
+
+```text
+AE2NetworkEndpoint_Modern.lua
+AE2Network_Modern.lua
+```
+
+Die grafische AE2-Oberfläche enthält Storage-, Crafting-, Job-, CPU- und P2P-Ansichten.
+
+## 14. Weitere Mod-Familien
+
+Nach demselben Schema werden die vorhandenen Controller für unter anderem diese Mods verwendet:
+
+```text
+3D Printer
+Applied Energistics 2
+Big Reactors
+Diesel Generator
+Extra Planets
+Forestry
+Galacticraft
+Gendustry
+Immersive Engineering
+Immersive Integration
+Immersive Railroading
+IndustrialCraft 2
+Logistics Pipes
+Mekanism
+PneumaticCraft
+ProjectE
+RFTools
+RotaryCraft
+SGCraft
+Thermal Expansion
+```
+
+Die gemeinsamen BULDACITY-Grafikfunktionen stehen allen Controllern zur Verfügung.
+
+## 15. Wireless
+
+Prüfen:
+
+```lua
+dofile("/home/BuldacityWirelessCheck_Modern.lua")
+```
+
+Topologie:
+
+```text
+ZENTRALE ))) ((( CLIENT
+```
+
+oder:
+
+```text
+ZENTRALE ── Kabel ── RELAY ))) ((( CLIENT
+```
+
+Bei Wireless muss die Wireless-Hardware korrekt vorhanden und aktiviert sein.
+
+## 16. Netzwerkdiagnose
+
+```lua
+dofile("/home/BuldacityNetworkTest.lua")
+```
+
+Prüft unter anderem:
+
+```text
+HELLO
+HEARTBEAT
+PING
+PONG
+Entfernung
+Wireless/Wired
+Relay/Access Point
+Latenz
+```
+
+## 17. Autostart
+
+Zentrale:
+
+```text
+/home/BuldacityAutoStart.lua
+/home/autorun.lua
+/home/buldacity-role.cfg
+```
+
+Konfiguration:
 
 ```text
 ROLE=SERVER
 ```
 
-Client, Beispiel:
+Client:
 
 ```text
 ROLE=CLIENT
 CLIENT=BigReactors
 ```
 
-Die verfügbaren Client-Namen stehen in `BuldacityAutoStart.lua`.
+## 18. Dateiablage
 
-## 10. Installation weiterer Mods
-
-Für jeden Mod gilt dasselbe Grundprinzip:
-
-**Mod installieren → OC-Komponente/Adapter anschließen → Scan → lokalen Controller prüfen → Network-Controller starten → Zentrale prüfen → Remote testen.**
-
-Unterstützte Familien im aktuellen Projekt umfassen unter anderem:
-
-- Applied Energistics 2
-- Big Reactors
-- Diesel Generator / Immersive Engineering
-- ExtraPlanets
-- Forestry
-- Galacticraft
-- Gendustry
-- Immersive Integration
-- Immersive Railroading
-- IndustrialCraft 2
-- LogisticsPipes
-- Mekanism
-- PneumaticCraft
-- ProjectE
-- RFTools
-- RotaryCraft
-- SGCraft
-- Thermal Expansion
-- OpenComputers 3D Printer
-
-## 11. Fehler: Datei nicht gefunden
-
-Programme bevorzugt nach `/home` kopieren.
-
-Bei Network-Wrappern und Autostart wird die Datei robust gesucht. Keine festen Annahmen über einen einzigen Installationspfad treffen.
-
-## 12. Fehler: Mod-Komponente fehlt
-
-1. `component.list()` prüfen.
-2. Adapter direkt neben den Mod-Block setzen.
-3. OC-Kabel prüfen.
-4. passenden Driver/Integration prüfen.
-5. Controller-Scan erneut ausführen.
-
-## 13. Fehler: Netzwerk fehlt
-
-1. Network Card/Wireless Card prüfen.
-2. `Network.lua` prüfen.
-3. Port `4242` prüfen.
-4. Zentrale zuerst starten.
-5. Client danach starten.
-6. `DEVICES` beobachten.
-
-## 14. Fehler: Remote-Bildschirm leer
-
-- Client braucht GPU/Screen.
-- Network-Controller muss laufen.
-- Client muss bereits registriert sein.
-- Remote erst danach öffnen.
-
-## 15. Automatischer Kompletttest
-
-Nach der Installation in dieser Reihenfolge testen:
+Grundsätzlich alles unter `/home`:
 
 ```text
-[1] Minecraft/Forge
-        ↓
-[2] OpenComputers
-        ↓
-[3] Mod-Komponenten
-        ↓
-[4] Lokaler Controller
-        ↓
-[5] Network-Controller
-        ↓
-[6] BULDACITY Tier-3
-        ↓
-[7] DEVICES
-        ↓
-[8] REMOTE
-        ↓
-[9] Steuerung
-        ↓
-[10] Autostart
+/home/
+├── Network.lua
+├── BuldacityUI.lua
+├── BuldacityOS_Tier3.lua
+├── BuldacityDesktop.lua
+├── BuldacityComponentServer.lua
+├── BuldacityComponentAgent.lua
+├── BuldacityComponentDashboard.lua
+├── BuldacityAutoStart.lua
+├── BuldacityNetworkTest.lua
+├── BuldacityWirelessCheck_Modern.lua
+└── <Mod-Dateien>
 ```
 
-## 16. Aktuelle Architektur
+## 19. Fehlerbehebung
 
-Es gibt **einen** BULDACITY-Server und beliebig viele Controller-Clients.
+### `Network` fehlt
 
 ```text
-                 BULDACITY TIER-3
-               BuldacityOS + Network
-                       │
-             BULDACITY/2 : 4242
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-      AE2 PC        Reactor PC     Mekanism PC
-        │              │              │
-     Mod-Gerät      Reactor/Turbine  Mod-Gerät
+/home/Network.lua
 ```
 
-Die Maschine wird lokal gesteuert; BULDACITY stellt die zentrale Anzeige, Überwachung und Remote-Bedienung bereit.
+Dann:
+
+```lua
+local shell=require("shell")
+shell.setWorkingDirectory("/home")
+local Network=require("Network")
+print(Network.PROTOCOL)
+```
+
+### `BuldacityUI` fehlt
+
+```text
+/home/BuldacityUI.lua
+```
+
+Test:
+
+```lua
+local UI=require("BuldacityUI")
+print(UI.W,UI.H)
+```
+
+### Client fehlt
+
+Prüfen:
+
+```text
+Network Card
+Network.lua
+BuldacityComponentAgent.lua
+Network-Wrapper
+Port 4242
+Wireless-Signal
+Relay/Access Point
+```
+
+Dann auf der Zentrale `SCAN`.
+
+### Remote leer
+
+Prüfen:
+
+```text
+Client läuft
+GPU vorhanden
+Screen vorhanden
+Network-Wrapper läuft
+Client erscheint in DEVICES
+REQUEST SCREEN ausführen
+```
+
+## 20. Kompletter Ablauf
+
+```text
+Minecraft 1.7.10
+ ↓
+Forge
+ ↓
+OpenComputers
+ ↓
+Tier-3 Zentrale
+ ↓
+/home/BuldacityUI.lua
+ ↓
+/home/Network.lua
+ ↓
+BULDACITY v9
+ ↓
+Component Server
+ ↓
+Client-PC
+ ↓
+Component Agent
+ ↓
+Mod Controller
+ ↓
+Network Wrapper
+ ↓
+BULDACITY/2 : 4242
+ ↓
+DEVICES
+ ↓
+PING/PONG
+ ↓
+COMPONENTS
+ ↓
+REMOTE
+ ↓
+Mod-Dashboard
+ ↓
+Autostart
+```
+
+## 21. Abschlusscheck
+
+- [ ] Zentrale startet
+- [ ] GPU-GUI sichtbar
+- [ ] BuldacityUI geladen
+- [ ] Component Server läuft
+- [ ] Client startet
+- [ ] Mod-Komponente erkannt
+- [ ] Client erscheint in DEVICES
+- [ ] Component IDs sichtbar
+- [ ] Netzwerk PASS
+- [ ] Remote-Screen sichtbar
+- [ ] Remote-Eingabe funktioniert
+- [ ] Mod-Dashboard funktioniert
+- [ ] Autostart funktioniert
+
+**Grundregel: Alle BULDACITY-Dateien werden aus `/home` geladen.**
