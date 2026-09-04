@@ -5,7 +5,6 @@
 local component=require("component")
 local event=require("event")
 local computer=require("computer")
-local filesystem=require("filesystem")
 local shell=require("shell")
 local network=require("Network")
 local UI=require("BuldacityUI")
@@ -15,117 +14,29 @@ local PORT=4242
 local VERSION="9.0"
 pcall(function() shell.setWorkingDirectory(HOME) end)
 package.path=HOME.."?.lua;"..HOME.."?/init.lua;"..(package.path or "")
-
-local page="DESKTOP"
-local selected=1
-local componentSelected=1
-local running=true
-local dirty=true
-local status="STARTING"
-local devices={}
-local frames={}
-local frameSize={}
-local history={power={},temp={},fuel={}}
-local logs={}
-local lastScan=0
-local lastDraw=0
-local reactor={}
-local pulse=0
-
-local ICON={DESKTOP="computer",NETWORK="network",DEVICES="computer",APPS="disk",REMOTE="computer",REACTOR="reactor"}
-local function now() return computer.uptime() end
+local page="DESKTOP";local selected=1;local componentSelected=1;local running=true;local dirty=true;local status="STARTING";local devices={};local frames={};local frameSize={};local history={power={},temp={},fuel={}};local logs={};local lastScan=0;local lastDraw=0;local reactor={};local pulse=0
+local function now()return computer.uptime()end
 local function fit(s,n)return UI.fit(s,n)end
-local function log(s)table.insert(logs,1,os.date("%H:%M:%S").."  "..tostring(s));if #logs>40 then table.remove(logs)end;dirty=true end
+local function log(s)table.insert(logs,1,os.date("%H:%M:%S").."  "..tostring(s));if#logs>40 then table.remove(logs)end;dirty=true end
 local function online(d)return d and now()-(d.last or 0)<12 end
 local function listDevices()local r={};for _,d in pairs(devices)do r[#r+1]=d end;table.sort(r,function(a,b)return tostring(a.name or a.address)<tostring(b.name or b.address)end);return r end
-local function selectedDevice()local l=listDevices();if #l==0 then return nil end;selected=math.max(1,math.min(selected,#l));return l[selected]end
+local function selectedDevice()local l=listDevices();if#l==0 then return nil end;selected=math.max(1,math.min(selected,#l));return l[selected]end
 local function componentList(d)local r={};if d and type(d.components)=="table"then for _,c in ipairs(d.components)do if type(c)=="table"then r[#r+1]=c end end end;table.sort(r,function(a,b)return tostring(a.type)..tostring(a.address)<tostring(b.type)..tostring(b.address)end);return r end
-local function remember(sender,p,distance)
- if not sender or not network.valid(p)then return end
- local d=devices[sender]or{address=sender};devices[sender]=d;local data=type(p.data)=="table"and p.data or{}
- for k,v in pairs(data)do d[k]=v end;d.address=sender;d.last=now();d.distance=tonumber(distance)or 0;d.wireless=d.distance>0 or data.wireless==true;d.link=d.wireless and "WIRELESS"or"WIRED"
- if p.kind=="LINK_CONFIRM"then d.linked=true end
- if p.kind=="PONG"then d.lastPong=now();if d.pingSent then d.latency=(now()-d.pingSent)*1000 end end
- if type(data.reactor)=="table"then reactor=data.reactor end
- dirty=true
-end
-local function sync()
- local ok,diag=pcall(network.getDiagnostics);if ok and type(diag)=="table"then for a,d in pairs(diag)do devices[a]=devices[a]or{address=a};for k,v in pairs(d)do devices[a][k]=v end;devices[a].address=a;devices[a].last=tonumber(d.last)or devices[a].last or 0;devices[a].distance=tonumber(d.distance)or 0;devices[a].wireless=devices[a].wireless==true or devices[a].distance>0;devices[a].link=devices[a].wireless and"WIRELESS"or"WIRED"end end
- local inv=_G.BuldacityComponents;if type(inv)=="table"then for a,d in pairs(inv.clients or{})do devices[a]=devices[a]or{address=a};for k,v in pairs(d)do devices[a][k]=v end;devices[a].componentCount=tonumber(d.count)or(type(d.components)=="table"and#d.components or 0)end end
-end
-local function scan()
- sync();network.broadcast("SERVER_HELLO",{name="BULDACITY TIER-3",role="SERVER",app="BULDACITY OS",version=VERSION,protocol="BULDACITY/2",port=PORT,discover=true})
- for _,d in ipairs(listDevices())do if online(d)then d.pingSent=now();network.send(d.address,"PING",{from="BULDACITY OS",id=tostring(d.pingSent)})end end
- lastScan=now();status="DISCOVERY SENT";log("Fleet discovery + diagnostics scan");dirty=true
-end
+local function remember(sender,p,distance)if not sender or not network.valid(p)then return end;local d=devices[sender]or{address=sender};devices[sender]=d;local data=type(p.data)=="table"and p.data or{};for k,v in pairs(data)do d[k]=v end;d.address=sender;d.last=now();d.distance=tonumber(distance)or 0;d.wireless=d.distance>0 or data.wireless==true;d.link=d.wireless and"WIRELESS"or"WIRED";if p.kind=="LINK_CONFIRM"then d.linked=true end;if p.kind=="PONG"then d.lastPong=now();if d.pingSent then d.latency=(now()-d.pingSent)*1000 end end;if type(data.reactor)=="table"then reactor=data.reactor end;dirty=true end
+local function sync()local ok,diag=pcall(network.getDiagnostics);if ok and type(diag)=="table"then for a,d in pairs(diag)do devices[a]=devices[a]or{address=a};for k,v in pairs(d)do devices[a][k]=v end;devices[a].address=a;devices[a].last=tonumber(d.last)or devices[a].last or 0;devices[a].distance=tonumber(d.distance)or 0;devices[a].wireless=devices[a].wireless==true or devices[a].distance>0;devices[a].link=devices[a].wireless and"WIRELESS"or"WIRED"end end;local inv=_G.BuldacityComponents;if type(inv)=="table"then for a,d in pairs(inv.clients or{})do devices[a]=devices[a]or{address=a};for k,v in pairs(d)do devices[a][k]=v end;devices[a].componentCount=tonumber(d.count)or(type(d.components)=="table"and#d.components or 0)end end end
+local function scan()sync();network.broadcast("SERVER_HELLO",{name="BULDACITY TIER-3",role="SERVER",app="BULDACITY OS",version=VERSION,protocol="BULDACITY/2",port=PORT,discover=true});for _,d in ipairs(listDevices())do if online(d)then d.pingSent=now();network.send(d.address,"PING",{from="BULDACITY OS",id=tostring(d.pingSent)})end end;lastScan=now();status="DISCOVERY SENT";log("Fleet discovery + diagnostics scan");dirty=true end
 local function requestScreen(d)if d and online(d)then network.send(d.address,"SCREEN_REQUEST",{from="BULDACITY OS",version=VERSION})end end
-local function drawRemote(d)
- UI.header("REMOTE // "..fit(d and d.name or"CLIENT",30),"LIVE SCREEN STREAM // BULDACITY/2",UI.C.pink)
- local f=d and frames[d.address];local sz=d and frameSize[d.address]
- if not f then UI.panel(3,7,UI.W-6,UI.H-12,"REMOTE DISPLAY",UI.C.pink);UI.icon(6,10,"computer",UI.C.pink,2);UI.text(14,10,"WAITING FOR SCREEN DATA",UI.C.yellow,UI.C.panel);UI.text(14,12,"Press R / SCAN or select the client again.",UI.C.muted,UI.C.panel);UI.button("refresh",14,15,18,"REQUEST SCREEN",UI.C.cyan);return end
- UI.panel(3,6,UI.W-6,UI.H-9,"REMOTE DISPLAY",UI.C.pink)
- local maxY=math.min(UI.H-12,#f);for y=1,maxY do local row=f[y];if type(row)=="table"then for x=1,math.min(UI.W-8,#row)do local c=row[x];if type(c)=="table"then local ch=c[1]or" ";gpu.setForeground(c[2]or UI.C.white);gpu.setBackground(c[3]or UI.C.black);gpu.set(5+x,7+y,ch)end end end end
- UI.text(5,UI.H-4,string.format("REMOTE %dx%d  |  CLIENT %s",sz and sz.width or 0,sz and sz.height or 0,fit(d.address,24)),UI.C.muted,UI.C.bg)
-end
-local function topCards()
- local l=listDevices();local up=0;local linked=0;local comps=0;for _,d in ipairs(l)do if online(d)then up=up+1 end;if d.linked then linked=linked+1 end;comps=comps+(tonumber(d.componentCount)or 0)end
- local cw=math.max(16,math.floor((UI.W-8)/4));local y=6
- UI.card(2,y,cw,6,"network","ONLINE",up.." / "..#l,UI.C.cyan)
- UI.card(3+cw,y,cw,6,"computer","LINKED",linked,math.min(100,#l>0 and linked/#l*100 or 0),UI.C.green)
- UI.card(4+cw*2,y,cw,6,"gear","COMPONENTS",comps,nil,UI.C.purple)
- UI.card(5+cw*3,y,cw,6,"power","SERVER","READY",100,UI.C.orange)
-end
-local function desktop()
- UI.clear();UI.header("DESKTOP","FLEET COMMAND // GPU ACCELERATED HUD",UI.C.cyan);topCards()
- local y=14;local left=math.floor(UI.W*.56);local right=UI.W-left-6
- UI.panel(2,y,left,UI.H-18,"CLIENT FLEET",UI.C.green);local l=listDevices();if#l==0 then UI.icon(6,y+5,"network",UI.C.yellow,2);UI.text(14,y+5,"NO CLIENTS DISCOVERED",UI.C.yellow,UI.C.panel);UI.text(14,y+7,"R = scan   |   clients need BuldacityAutoStart.lua",UI.C.muted,UI.C.panel)end
- for i,d in ipairs(l)do local yy=y+3+(i-1)*2;if yy>UI.H-7 then break end;local active=i==selected;local c=online(d)and UI.C.green or UI.C.red;if active then UI.rect(4,yy,left-4,2,UI.C.panel2);UI.rect(4,yy,2,2,UI.C.cyan)end;UI.icon(7,yy,d.wireless and"network"or"computer",active and UI.C.cyan or c,1);UI.text(12,yy,fit(d.name or"CLIENT",25),active and UI.C.cyan or UI.C.white,UI.C.panel2);UI.text(39,yy,fit(d.controller or d.app or"CONTROLLER",18),UI.C.muted,UI.C.panel2);UI.text(59,yy,d.link or"--",d.wireless and UI.C.purple or UI.C.cyan,UI.C.panel2);UI.text(70,yy,online(d)and"●"or"○",c,UI.C.panel2)end
- UI.panel(4+left,y,right,UI.H-18,"SYSTEM TELEMETRY",UI.C.purple);local d=selectedDevice();if d then UI.text(8+left,y+3,fit(d.name or d.address,math.max(12,right-7)),UI.C.white,UI.C.panel);UI.text(8+left,y+5,"LATENCY",UI.C.muted,UI.C.panel);UI.text(20+left,y+5,d.latency and string.format("%.0f ms",d.latency)or"--",UI.C.cyan,UI.C.panel);UI.text(8+left,y+7,"LINK",UI.C.muted,UI.C.panel);UI.text(20+left,y+7,d.link or"--",d.wireless and UI.C.purple or UI.C.cyan,UI.C.panel);UI.text(8+left,y+9,"COMPONENTS",UI.C.muted,UI.C.panel);UI.text(20+left,y+9,tostring(d.componentCount or 0),UI.C.purple,UI.C.panel);UI.text(8+left,y+11,"DISTANCE",UI.C.muted,UI.C.panel);UI.text(20+left,y+11,tostring(d.distance or 0),UI.C.yellow,UI.C.panel);UI.badge(8+left,y+14,online(d),online(d)and"ONLINE"or"OFFLINE",online(d)and UI.C.green or UI.C.red)else UI.text(8+left,y+5,"Select a client",UI.C.muted,UI.C.panel)end
- UI.statusLine("R SCAN   ENTER REMOTE   TAB NEXT PAGE   Q EXIT   |   "..status,UI.C.muted);UI.footer({{"home","HOME",UI.C.cyan,page=="DESKTOP"},{"net","NETWORK",UI.C.blue,page=="NETWORK"},{"dev","DEVICES",UI.C.purple,page=="DEVICES"},{"pc","REMOTE",UI.C.pink,page=="REMOTE"},{"rx","REACTOR",UI.C.green,page=="REACTOR"}})
-end
-local function networkPage()
- UI.clear();UI.header("NETWORK","LINK MATRIX // WIRED + WIRELESS + RELAYS",UI.C.blue);local ns=network.status();local l=listDevices();local strength=tonumber(ns.wirelessStrength)or 0;UI.card(2,6,25,6,"network","WIRELESS",ns.wireless and"READY"or"WIRED",ns.wireless and math.min(100,strength/4)or 100,ns.wireless and UI.C.purple or UI.C.cyan);UI.card(29,6,25,6,"network","RELAY",ns.relayPathType or"NONE",ns.relayDetected and 100 or 0,UI.C.orange);UI.card(56,6,25,6,"network","CLIENTS",#l,math.min(100,#l*5),UI.C.green)
- UI.panel(2,14,UI.W-4,UI.H-18,"LINK MATRIX",UI.C.blue);for i,d in ipairs(l)do local yy=16+(i-1)*2;if yy>UI.H-6 then break end;UI.text(5,yy,fit(d.name or"CLIENT",25),UI.C.white,UI.C.panel);UI.bar(33,yy,22,online(d)and 100 or 0,d.wireless and UI.C.purple or UI.C.green);UI.text(57,yy,d.link or"--",d.wireless and UI.C.purple or UI.C.cyan,UI.C.panel);UI.text(69,yy,d.latency and string.format("%4.0fms",d.latency)or"   --",UI.C.white,UI.C.panel);UI.text(78,yy,tostring(d.componentCount or 0),UI.C.purple,UI.C.panel)end
- UI.statusLine("PORT "..PORT.."   PROTOCOL "..network.PROTOCOL.."   RELAY "..(ns.relayPathType or"NONE"),UI.C.muted);UI.footer({{"home","HOME",UI.C.cyan},{"net","NETWORK",UI.C.blue,true},{"dev","DEVICES",UI.C.purple},{"scan","SCAN",UI.C.yellow}})
-end
-local function devicesPage()
- UI.clear();UI.header("DEVICES","COMPONENT EXPLORER // ALL IDS",UI.C.purple);local l=listDevices();local d=selectedDevice();local left=math.floor(UI.W*.35);UI.panel(2,6,left,UI.H-10,"CLIENTS",UI.C.purple);for i,x in ipairs(l)do local yy=8+(i-1)*2;if yy>UI.H-6 then break end;if i==selected then UI.rect(4,yy,left-4,2,UI.C.panel2)end;UI.icon(6,yy,x.wireless and"network"or"computer",i==selected and UI.C.cyan or UI.C.muted);UI.text(11,yy,fit(x.name or x.address,20),i==selected and UI.C.cyan or UI.C.white,UI.C.panel2)end
- local x=4+left;UI.panel(x,6,UI.W-x-2,UI.H-10,"COMPONENT INVENTORY",UI.C.cyan);if d then UI.text(x+3,9,"PC ADDRESS",UI.C.muted,UI.C.panel);UI.text(x+3,10,fit(d.address,30),UI.C.cyan,UI.C.panel);local cl=componentList(d);for i,c in ipairs(cl)do local yy=12+(i-1)*2;if yy>UI.H-5 then break end;local a=i==componentSelected;if a then UI.rect(x+2,yy,UI.W-x-6,2,UI.C.panel2)end;UI.icon(x+4,yy,c.type,a and UI.C.cyan or UI.C.muted);UI.text(x+9,yy,fit(c.type,18),a and UI.C.cyan or UI.C.white,UI.C.panel2);UI.text(x+29,yy,"ID",UI.C.muted,UI.C.panel2);UI.text(x+33,yy,fit(c.address,28),UI.C.cyan,UI.C.panel2)end else UI.text(x+3,10,"NO CLIENT SELECTED",UI.C.yellow,UI.C.panel)end
- UI.statusLine("UP/DOWN CLIENT   LEFT/RIGHT COMPONENT   ENTER REMOTE",UI.C.muted);UI.footer({{"home","HOME",UI.C.cyan},{"net","NETWORK",UI.C.blue},{"dev","DEVICES",UI.C.purple,true},{"pc","REMOTE",UI.C.pink}})
-end
-local function reactorPage()
- UI.clear();UI.header("REACTOR","LIVE TELEMETRY // BIG REACTORS / EXTREME REACTORS",UI.C.green);local r=reactor or {};local fuel=tonumber(r.fuelPercent or r.fuel or r.fuelLevel or 0)or 0;local temp=tonumber(r.temperature or r.temp or 0)or 0;local power=tonumber(r.power or r.rf or r.energy or 0)or 0;local active=r.active==true or r.running==true
- UI.card(2,6,24,7,"power","POWER",string.format("%.0f",power),math.min(100,power>0 and 100 or 0),UI.C.orange);UI.card(28,6,24,7,"reactor","TEMPERATURE",string.format("%.0f C",temp),math.min(100,temp/1000*100),temp>800 and UI.C.red or UI.C.yellow);UI.card(54,6,24,7,"fluid","FUEL",string.format("%.1f%%",fuel),fuel, fuel<10 and UI.C.red or UI.C.green)
- UI.panel(2,15,76,UI.H-19,"LIVE GRAPH",UI.C.cyan);UI.graph(5,18,UI.W-10,UI.H-25,history.power,UI.C.orange);UI.text(6,UI.H-5,"POWER HISTORY",UI.C.muted,UI.C.panel);UI.badge(52,UI.H-5,active,active and"REACTOR ACTIVE"or"REACTOR IDLE",active and UI.C.green or UI.C.red);UI.statusLine("Telemetry is shown only when a controller reports reactor data.",UI.C.muted);UI.footer({{"home","HOME",UI.C.cyan},{"net","NETWORK",UI.C.blue},{"dev","DEVICES",UI.C.purple},{"rx","REACTOR",UI.C.green,true}})
-end
+local function drawRemote(d)UI.header("REMOTE // "..fit(d and d.name or"CLIENT",30),"LIVE SCREEN STREAM // BULDACITY/2",UI.C.pink);local f=d and frames[d.address];local sz=d and frameSize[d.address];if not f then UI.panel(3,7,UI.W-6,UI.H-12,"REMOTE DISPLAY",UI.C.pink);UI.icon(6,10,"computer",UI.C.pink,2);UI.text(14,10,"WAITING FOR SCREEN DATA",UI.C.yellow,UI.C.panel);UI.text(14,12,"Press R / SCAN or request the screen.",UI.C.muted,UI.C.panel);UI.button("refresh",14,15,18,"REQUEST SCREEN",UI.C.cyan);return end;UI.panel(3,6,UI.W-6,UI.H-9,"REMOTE DISPLAY",UI.C.pink);local maxY=math.min(UI.H-12,#f);for y=1,maxY do local row=f[y];if type(row)=="table"then for x=1,math.min(UI.W-8,#row)do local c=row[x];if type(c)=="table"then gpu.setForeground(c[2]or UI.C.white);gpu.setBackground(c[3]or UI.C.black);gpu.set(5+x,7+y,c[1]or" ")end end end end;UI.text(5,UI.H-4,string.format("REMOTE %dx%d  |  CLIENT %s",sz and sz.width or 0,sz and sz.height or 0,fit(d.address,24)),UI.C.muted,UI.C.bg)end
+local function topCards()local l=listDevices();local up=0;local linked=0;local comps=0;for _,d in ipairs(l)do if online(d)then up=up+1 end;if d.linked then linked=linked+1 end;comps=comps+(tonumber(d.componentCount)or 0)end;local cw=math.max(16,math.floor((UI.W-8)/4));local y=6;UI.card(2,y,cw,6,"network","ONLINE",up.." / "..#l,math.min(100,#l>0 and up/#l*100 or 0),UI.C.cyan);UI.card(3+cw,y,cw,6,"computer","LINKED",linked,math.min(100,#l>0 and linked/#l*100 or 0),UI.C.green);UI.card(4+cw*2,y,cw,6,"gear","COMPONENTS",comps,nil,UI.C.purple);UI.card(5+cw*3,y,cw,6,"power","SERVER","READY",100,UI.C.orange)end
+local function desktop()UI.clear();UI.header("DESKTOP","FLEET COMMAND // GPU ACCELERATED HUD",UI.C.cyan);topCards();local y=14;local left=math.floor(UI.W*.56);local right=UI.W-left-6;UI.panel(2,y,left,UI.H-18,"CLIENT FLEET",UI.C.green);local l=listDevices();if#l==0 then UI.icon(6,y+5,"network",UI.C.yellow,2);UI.text(14,y+5,"NO CLIENTS DISCOVERED",UI.C.yellow,UI.C.panel);UI.text(14,y+7,"R = scan   |   clients need BuldacityAutoStart.lua",UI.C.muted,UI.C.panel)end;for i,d in ipairs(l)do local yy=y+3+(i-1)*2;if yy>UI.H-7 then break end;local active=i==selected;local c=online(d)and UI.C.green or UI.C.red;if active then UI.rect(4,yy,left-4,2,UI.C.panel2);UI.rect(4,yy,2,2,UI.C.cyan)end;UI.icon(7,yy,d.wireless and"network"or"computer",active and UI.C.cyan or c,1);UI.text(12,yy,fit(d.name or"CLIENT",25),active and UI.C.cyan or UI.C.white,UI.C.panel2);UI.text(39,yy,fit(d.controller or d.app or"CONTROLLER",18),UI.C.muted,UI.C.panel2);UI.text(59,yy,d.link or"--",d.wireless and UI.C.purple or UI.C.cyan,UI.C.panel2);UI.text(70,yy,online(d)and"●"or"○",c,UI.C.panel2)end;UI.panel(4+left,y,right,UI.H-18,"SYSTEM TELEMETRY",UI.C.purple);local d=selectedDevice();if d then UI.text(8+left,y+3,fit(d.name or d.address,math.max(12,right-7)),UI.C.white,UI.C.panel);UI.text(8+left,y+5,"LATENCY",UI.C.muted,UI.C.panel);UI.text(20+left,y+5,d.latency and string.format("%.0f ms",d.latency)or"--",UI.C.cyan,UI.C.panel);UI.text(8+left,y+7,"LINK",UI.C.muted,UI.C.panel);UI.text(20+left,y+7,d.link or"--",d.wireless and UI.C.purple or UI.C.cyan,UI.C.panel);UI.text(8+left,y+9,"COMPONENTS",UI.C.muted,UI.C.panel);UI.text(20+left,y+9,tostring(d.componentCount or 0),UI.C.purple,UI.C.panel);UI.text(8+left,y+11,"DISTANCE",UI.C.muted,UI.C.panel);UI.text(20+left,y+11,tostring(d.distance or 0),UI.C.yellow,UI.C.panel);UI.badge(8+left,y+14,online(d),online(d)and"ONLINE"or"OFFLINE",online(d)and UI.C.green or UI.C.red)else UI.text(8+left,y+5,"Select a client",UI.C.muted,UI.C.panel)end;UI.statusLine("R SCAN   ENTER REMOTE   TAB NEXT PAGE   Q EXIT   |   "..status,UI.C.muted);UI.footer({{"home","HOME",UI.C.cyan,page=="DESKTOP"},{"net","NETWORK",UI.C.blue,page=="NETWORK"},{"dev","DEVICES",UI.C.purple,page=="DEVICES"},{"pc","REMOTE",UI.C.pink,page=="REMOTE"},{"rx","REACTOR",UI.C.green,page=="REACTOR"}})end
+local function networkPage()UI.clear();UI.header("NETWORK","LINK MATRIX // WIRED + WIRELESS + RELAYS",UI.C.blue);local ns=network.status();local l=listDevices();local strength=tonumber(ns.wirelessStrength)or 0;UI.card(2,6,25,6,"network","WIRELESS",ns.wireless and"READY"or"WIRED",ns.wireless and math.min(100,strength/4)or 100,ns.wireless and UI.C.purple or UI.C.cyan);UI.card(29,6,25,6,"network","RELAY",ns.relayPathType or"NONE",ns.relayDetected and 100 or 0,UI.C.orange);UI.card(56,6,25,6,"network","CLIENTS",#l,math.min(100,#l*5),UI.C.green);UI.panel(2,14,UI.W-4,UI.H-18,"LINK MATRIX",UI.C.blue);for i,d in ipairs(l)do local yy=16+(i-1)*2;if yy>UI.H-6 then break end;UI.text(5,yy,fit(d.name or"CLIENT",25),UI.C.white,UI.C.panel);UI.bar(33,yy,22,online(d)and 100 or 0,d.wireless and UI.C.purple or UI.C.green);UI.text(57,yy,d.link or"--",d.wireless and UI.C.purple or UI.C.cyan,UI.C.panel);UI.text(69,yy,d.latency and string.format("%4.0fms",d.latency)or"   --",UI.C.white,UI.C.panel);UI.text(78,yy,tostring(d.componentCount or 0),UI.C.purple,UI.C.panel)end;UI.statusLine("PORT "..PORT.."   PROTOCOL "..network.PROTOCOL.."   RELAY "..(ns.relayPathType or"NONE"),UI.C.muted);UI.footer({{"home","HOME",UI.C.cyan},{"net","NETWORK",UI.C.blue,true},{"dev","DEVICES",UI.C.purple},{"scan","SCAN",UI.C.yellow}})end
+local function devicesPage()UI.clear();UI.header("DEVICES","COMPONENT EXPLORER // ALL IDS",UI.C.purple);local l=listDevices();local d=selectedDevice();local left=math.floor(UI.W*.35);UI.panel(2,6,left,UI.H-10,"CLIENTS",UI.C.purple);for i,x in ipairs(l)do local yy=8+(i-1)*2;if yy>UI.H-6 then break end;if i==selected then UI.rect(4,yy,left-4,2,UI.C.panel2)end;UI.icon(6,yy,x.wireless and"network"or"computer",i==selected and UI.C.cyan or UI.C.muted);UI.text(11,yy,fit(x.name or x.address,20),i==selected and UI.C.cyan or UI.C.white,UI.C.panel2)end;local x=4+left;UI.panel(x,6,UI.W-x-2,UI.H-10,"COMPONENT INVENTORY",UI.C.cyan);if d then UI.text(x+3,9,"PC ADDRESS",UI.C.muted,UI.C.panel);UI.text(x+3,10,fit(d.address,30),UI.C.cyan,UI.C.panel);local cl=componentList(d);for i,c in ipairs(cl)do local yy=12+(i-1)*2;if yy>UI.H-5 then break end;local a=i==componentSelected;if a then UI.rect(x+2,yy,UI.W-x-6,2,UI.C.panel2)end;UI.icon(x+4,yy,c.type,a and UI.C.cyan or UI.C.muted);UI.text(x+9,yy,fit(c.type,18),a and UI.C.cyan or UI.C.white,UI.C.panel2);UI.text(x+29,yy,"ID",UI.C.muted,UI.C.panel2);UI.text(x+33,yy,fit(c.address,28),UI.C.cyan,UI.C.panel2)end else UI.text(x+3,10,"NO CLIENT SELECTED",UI.C.yellow,UI.C.panel)end;UI.statusLine("UP/DOWN CLIENT   LEFT/RIGHT COMPONENT   ENTER REMOTE",UI.C.muted);UI.footer({{"home","HOME",UI.C.cyan},{"net","NETWORK",UI.C.blue},{"dev","DEVICES",UI.C.purple,true},{"pc","REMOTE",UI.C.pink}})end
+local function reactorPage()UI.clear();UI.header("REACTOR","LIVE TELEMETRY // BIG REACTORS / EXTREME REACTORS",UI.C.green);local r=reactor or{};local fuel=tonumber(r.fuelPercent or r.fuel or r.fuelLevel or 0)or 0;local temp=tonumber(r.temperature or r.temp or 0)or 0;local power=tonumber(r.power or r.rf or r.energy or 0)or 0;local active=r.active==true or r.running==true;UI.card(2,6,24,7,"power","POWER",string.format("%.0f",power),math.min(100,power>0 and 100 or 0),UI.C.orange);UI.card(28,6,24,7,"reactor","TEMPERATURE",string.format("%.0f C",temp),math.min(100,temp/1000*100),temp>800 and UI.C.red or UI.C.yellow);UI.card(54,6,24,7,"fluid","FUEL",string.format("%.1f%%",fuel),fuel,fuel<10 and UI.C.red or UI.C.green);UI.panel(2,15,76,UI.H-19,"LIVE GRAPH",UI.C.cyan);UI.graph(5,18,UI.W-10,UI.H-25,history.power,UI.C.orange);UI.text(6,UI.H-5,"POWER HISTORY",UI.C.muted,UI.C.panel);UI.badge(52,UI.H-5,active,active and"REACTOR ACTIVE"or"REACTOR IDLE",active and UI.C.green or UI.C.red);UI.statusLine("Telemetry is shown only when a controller reports reactor data.",UI.C.muted);UI.footer({{"home","HOME",UI.C.cyan},{"net","NETWORK",UI.C.blue},{"dev","DEVICES",UI.C.purple},{"rx","REACTOR",UI.C.green,true}})end
 local function remotePage()UI.clear();local d=selectedDevice();if d then drawRemote(d)else UI.header("REMOTE","NO CLIENT SELECTED",UI.C.pink);UI.text(6,10,"No clients discovered.",UI.C.yellow)end;UI.footer({{"home","HOME",UI.C.cyan},{"dev","DEVICES",UI.C.purple},{"pc","REMOTE",UI.C.pink,true},{"scan","SCAN",UI.C.yellow}})end
 local function draw()UI.resize();if UI.W>160 then pcall(gpu.setResolution,160,50);UI.resize()end;UI.clear();if page=="DESKTOP"then desktop()elseif page=="NETWORK"then networkPage()elseif page=="DEVICES"then devicesPage()elseif page=="REMOTE"then remotePage()elseif page=="REACTOR"then reactorPage()else desktop()end;dirty=false;lastDraw=now()end
-
-local function callback(sender,p,distance)
- remember(sender,p,distance)
- if p.kind=="SCREEN_BEGIN"then frames[sender]={};frameSize[sender]=p.data or{};elseif p.kind=="SCREEN_ROW"then local d=p.data or{};frames[sender]=frames[sender]or{};frames[sender][d.y]=d.cells;elseif p.kind=="SCREEN_END"then status="REMOTE FRAME RECEIVED";dirty=true end
- if p.kind=="PONG"then status="CLIENT TEST PASS"end
-end
+local function callback(sender,p,distance)remember(sender,p,distance);if p.kind=="SCREEN_BEGIN"then frames[sender]={};frameSize[sender]=p.data or{}elseif p.kind=="SCREEN_ROW"then local d=p.data or{};frames[sender]=frames[sender]or{};frames[sender][d.y]=d.cells elseif p.kind=="SCREEN_END"then status="REMOTE FRAME RECEIVED";dirty=true end;if p.kind=="PONG"then status="CLIENT TEST PASS"end end
 local ok,mode=network.startServer(callback);if not ok then status="SERVER ERROR: "..tostring(mode);log(status)else status="SERVER "..tostring(mode)end
 scan();draw()
 local timer=event.timer(2,function()sync();if page=="REACTOR"and reactor then local p=tonumber(reactor.power or reactor.rf or reactor.energy or 0)or 0;local t=tonumber(reactor.temperature or reactor.temp or 0)or 0;local f=tonumber(reactor.fuelPercent or reactor.fuel or reactor.fuelLevel or 0)or 0;table.insert(history.power,p);table.insert(history.temp,t);table.insert(history.fuel,f);if#history.power>80 then table.remove(history.power,1);table.remove(history.temp,1);table.remove(history.fuel,1)end end;dirty=true end,math.huge)
-while running do
- local e,a,x,y,b=event.pull(0.25)
- if e=="touch"then
-  if UI.hit("home",x,y)then page="DESKTOP"elseif UI.hit("net",x,y)then page="NETWORK"elseif UI.hit("dev",x,y)then page="DEVICES"elseif UI.hit("pc",x,y)then page="REMOTE";requestScreen(selectedDevice())elseif UI.hit("rx",x,y)then page="REACTOR"elseif UI.hit("scan",x,y)then scan()elseif UI.hit("refresh",x,y)then requestScreen(selectedDevice())end;dirty=true
- elseif e=="key_down"then
-  local c=y
-  if c==16 or c==17 then running=false
-  elseif c==19 then scan()
-  elseif c==28 then if page=="DEVICES"then requestScreen(selectedDevice());page="REMOTE"elseif page=="DESKTOP"then requestScreen(selectedDevice());page="REMOTE"end
-  elseif c==15 then local pages={"DESKTOP","NETWORK","DEVICES","REMOTE","REACTOR"};local n=1;for i,v in ipairs(pages)do if v==page then n=i end end;page=pages[n%#pages+1]
-  elseif c==200 then selected=math.max(1,selected-1);dirty=true
-  elseif c==208 then selected=math.min(math.max(1,#listDevices()),selected+1);dirty=true
-  elseif c==203 and page=="DEVICES"then componentSelected=math.max(1,componentSelected-1);dirty=true
-  elseif c==205 and page=="DEVICES"then local cl=componentList(selectedDevice());componentSelected=math.min(math.max(1,#cl),componentSelected+1);dirty=true
-  end
- elseif e=="interrupted"then running=false end
- if dirty and now()-lastDraw>0.08 then draw()end
- pulse=pulse+1
-end
+while running do local e,a,x,y,b=event.pull(0.25);if e=="touch"then if UI.hit("home",x,y)then page="DESKTOP"elseif UI.hit("net",x,y)then page="NETWORK"elseif UI.hit("dev",x,y)then page="DEVICES"elseif UI.hit("pc",x,y)then page="REMOTE";requestScreen(selectedDevice())elseif UI.hit("rx",x,y)then page="REACTOR"elseif UI.hit("scan",x,y)then scan()elseif UI.hit("refresh",x,y)then requestScreen(selectedDevice())end;dirty=true elseif e=="key_down"then local c=y;if c==16 or c==17 then running=false elseif c==19 then scan()elseif c==28 then if page=="DEVICES"or page=="DESKTOP"then requestScreen(selectedDevice());page="REMOTE"end elseif c==15 then local pages={"DESKTOP","NETWORK","DEVICES","REMOTE","REACTOR"};local n=1;for i,v in ipairs(pages)do if v==page then n=i end end;page=pages[n%#pages+1] elseif c==200 then selected=math.max(1,selected-1);dirty=true elseif c==208 then selected=math.min(math.max(1,#listDevices()),selected+1);dirty=true elseif c==203 and page=="DEVICES"then componentSelected=math.max(1,componentSelected-1);dirty=true elseif c==205 and page=="DEVICES"then local cl=componentList(selectedDevice());componentSelected=math.min(math.max(1,#cl),componentSelected+1);dirty=true end elseif e=="interrupted"then running=false end;if dirty and now()-lastDraw>0.08 then draw()end;pulse=pulse+1 end
 pcall(event.cancel,timer);UI.clear()
