@@ -1,117 +1,138 @@
 # OpenComputers Komponenten & Anschlussübersicht
 
-Diese Übersicht erklärt die OpenComputers-Komponenten für die Lua-Programme in diesem Repository.
-
-## Grundaufbau
+## 1. Grundaufbau
 
 ```text
-[Touchscreen]
-      │
-[Computer] ─── [GPU]
-      │
-      ├── [Mod-Komponente / Adapter]
-      └── [Network Card / Wireless Network Card]
+                 ┌── GPU ── Screen ── Keyboard
+[OpenComputers PC]
+        │
+        ├── direkte OC-Komponente
+        │
+        ├── OC-Kabel ── Adapter ── Mod-Block
+        │
+        └── Network Card / Wireless Network Card
 ```
 
-## Immersive Engineering 0.7.7
+## 2. Zentrale
 
-Ziel: `ImmersiveEngineering-0.7.7.jar`, Minecraft 1.7.10.
+Die zentrale Maschine ist ein Tier-3-PC mit:
+- GPU
+- Screen
+- Keyboard
+- Network/Wireless Network Card
+- `Network.lua`
+- `BuldacityOS_Tier3.lua`
+- optional `BuldacityUI.lua`
 
-Der vorhandene Diesel-Generator-Controller bleibt getrennt. `ImmersiveEngineering_Modern.lua` übernimmt die übrigen zur Laufzeit erkennbaren IE-Komponenten und zeigt nur deren tatsächlich exponierte OpenComputers-Methoden.
+## 3. Lokale Controller
 
-- `ImmersiveEngineering_Modern.lua` – lokale Buldacity-Version
-- `ImmersiveEngineering_Network_Modern.lua` – Tier-2-Netzwerkversion
-- Live-Komponentenscan alle 2 Sekunden
-- Energie-/Fluid-/Redstone-/Inventory-relevante APIs werden erkannt, wenn sie exponiert sind
+Jeder Mod kann auf einem eigenen normalen OpenComputers-PC laufen. Die Mod-Logik bleibt dort lokal.
 
-## Immersive Integration 0.6.8
-
-Ziel: `immersiveintegration-0.6.8.jar`, Minecraft 1.7.10. Immersive Integration erweitert Immersive Engineering und stellt zusätzliche Integrations-/Transport-/Energie-Inhalte bereit.
-
-- `ImmersiveIntegration_Modern.lua` – lokale Version
-- `ImmersiveIntegration_Network_Modern.lua` – Tier-2-Netzwerkversion
-- dynamische OC-Komponentenerkennung
-- API-Anzeige ausschließlich für tatsächlich vorhandene Methoden
-
-## Immersive Railroading 1.7.10-forge-1.9.1
-
-- `ImmersiveRailroading_Modern.lua` – lokale Version
-- `ImmersiveRailroading_Network_Modern.lua` – Tier-2-Netzwerkversion
-- Live-Erkennung von Rail-/Train-/Track-/Locomotive-relevanten OC-Endpunkten
-- keine erfundenen Steuerfunktionen: nur installierte OC-API wird angezeigt
-
-## IndustrialCraft 2 2.2.827 Experimental
-
-Ziel: `industrialcraft-2-2.2.827-experimental.jar`, Minecraft 1.7.10.
-
-- `IndustrialCraft2_Modern.lua` – lokale Buldacity-Version
-- `IndustrialCraft2_Network_Modern.lua` – Tier-2-Netzwerkversion
-- Live-Erkennung von IC2-/EU-/Energy-/Inventory-/Fluid-/Charge-APIs
-- nur tatsächlich exponierte Methoden werden angezeigt
-
-## Komponentenliste
-
-Bei allen neuen Controllern wird `component.list()` regelmäßig neu ausgewertet. Neue oder entfernte OpenComputers-Komponenten werden dadurch während des laufenden Programms automatisch übernommen.
-
-## Netzwerk
+## 4. Netzwerk
 
 ```text
-Tier-3 Server
-     │
- Wireless Network
-     │
-     ├──────── Tier-2 Immersive Engineering
-     ├──────── Tier-2 Immersive Integration
-     ├──────── Tier-2 Immersive Railroading
-     └──────── Tier-2 IndustrialCraft 2
+Tier-3 BULDACITY
+       │
+       │ BULDACITY/2 :4242
+       ├── AE2 Client
+       ├── Big Reactors Client
+       ├── Mekanism Client
+       ├── Thermal Client
+       └── weitere Clients
 ```
 
-Die Netzwerkversionen starten den gemeinsamen `BuldacityNetworkClient` und registrieren den jeweiligen Controller am Tier-3-Server.
+## 5. Relevante Komponenten
 
-## LogisticsPipes 0.9.3.132
-
-Ziel: `logisticspipes-0.9.3.132.jar`, Minecraft 1.7.10.
-
-LogisticsPipes besitzt eine OpenComputers-Integrationsschicht. Der Controller verwendet deshalb dynamische Erkennung statt einer festen, möglicherweise falschen Komponentenadresse.
-
-- `LogisticsPipes_Modern.lua`
-- `LogisticsPipesNetwork_Modern.lua`
-- Live-Komponentenbus
-- automatischer Scan alle 2 Sekunden
-- API-/Inventory-/Request-/Crafting-Erkennung
-- Tier-2/Tier-3-Betrieb
-
-## PneumaticCraft
-
+### Big Reactors
 ```text
-Computer + GPU + Screen + PneumaticCraft-OC-Anschluss
-                         └─ Drone / Drone Interface
+br_reactor
+br_turbine
 ```
 
-## Big Reactors
-
+### Diesel Generator / Immersive Engineering
 ```text
-Computer + GPU + Screen + br_reactor
-                         └─ optional br_turbine
+ie_diesel_generator
 ```
 
-## AE2
+### AE2
+Je nach Installation werden die tatsächlich exponierten AE2-Komponenten verwendet. Keine feste Komponente annehmen, sondern Scan durchführen.
 
+### 3D Printer
 ```text
-Computer + GPU + Screen + me_controller + AE2 ME Network
+printer3d
 ```
 
-## Diesel Generator
-
+### Netzwerk
 ```text
-Computer + GPU + Screen + ie_diesel_generator
+modem
 ```
 
-Der Diesel Generator wird nicht doppelt in den neuen IE-Controller integriert.
+## 6. Adapter
 
-## RotaryCraft
+Ein Adapter macht einen unterstützten Nicht-OC-Mod-Block als Komponente verfügbar. Ein Adapter allein garantiert keine vollständige Mod-API; der installierte Driver entscheidet, welche Methoden tatsächlich verfügbar sind.
 
-```text
-Computer + GPU + Screen + optional Redstone
-                         └─ RotaryCraft-Maschine
+Deshalb immer:
+
+**Adapter anschließen → `component.list()` → Controller-Scan → API prüfen.**
+
+## 7. Grafik
+
+Die gemeinsame Oberfläche befindet sich in `BuldacityUI.lua`.
+
+Sie stellt bereit:
+- BULDACITY Header
+- Panels
+- Status-Badges
+- Buttons
+- Fortschrittsbalken
+- responsive Auflösung
+- Touch-Hitboxen
+- einheitliche Farben
+
+`BuldacityComponentDashboard.lua` verwendet diese Basis für generische Komponenten-Dashboards.
+
+## 8. Big Reactors Grafik
+
+`ReactorBigReactors043A_Touch_Responsive.lua` besitzt eine eigene spezialisierte Oberfläche mit:
+- CORE
+- RODS
+- TURBINE
+- Live-Telemetrie
+- Steuerbuttons
+
+## 9. Mod-Familien
+
+Für die Projekt-Controller sind unter anderem vorgesehen:
+
+- AE2
+- Big Reactors
+- Diesel Generator / Immersive Engineering
+- ExtraPlanets
+- Forestry
+- Galacticraft
+- Gendustry
+- Immersive Integration
+- Immersive Railroading
+- IndustrialCraft 2
+- LogisticsPipes
+- Mekanism
+- PneumaticCraft
+- ProjectE
+- RFTools
+- RotaryCraft
+- SGCraft
+- Thermal Expansion
+- 3D Printer
+
+## 10. Diagnose
+
+Auf einem OpenComputers-PC:
+
+```lua
+component.list()
+component.list("modem")
+component.list("br_reactor")
+component.list("br_turbine")
 ```
+
+Danach den jeweiligen Controller starten und nur die tatsächlich gefundenen Methoden verwenden.
