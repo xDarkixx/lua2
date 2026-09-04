@@ -1,9 +1,9 @@
 -- Network.lua
 -- Shared BULDACITY/2 network service.
 -- OpenComputers 1.7.10 / port 4242.
--- Supports wired Network Cards, Wireless Network Cards (Tier 2), and
--- OpenComputers Relay/Access Point network paths. Relays are handled by
--- OpenComputers itself; this library keeps wireless reception transparent.
+-- Supports wired Network Cards, Wireless Network Cards (Tier 2),
+-- OpenComputers Relay blocks and Access Points.
+-- Relay/Access Point wireless repeaters are configured automatically.
 
 local component=require("component")
 local computer=require("computer")
@@ -12,15 +12,14 @@ local event=require("event")
 local M={
  PROTOCOL="BULDACITY/2",PORT=4242,TIMEOUT=12,SCREEN_INTERVAL=1.0,
  MAX_WIRELESS_STRENGTH=400,
- modem=nil,wireless=false,wirelessStrength=0,relayPath=true,
+ modem=nil,wireless=false,wirelessStrength=0,
+ relayPath=true,relayCount=0,accessPointCount=0,relayWirelessCount=0,
  server=nil,lastServer=0,serverListening=false,serverCallback=nil,
  clientListening=false,heartbeatTimer=nil
 }
 
 local function findModem()
  if M.modem and type(M.modem.open)=="function" then return M.modem end
- -- Prefer a wireless-capable modem when several cards are installed. This
- -- makes wireless reception work even when a wired card is also present.
  local fallback=nil
  for address in component.list("modem",true) do
   local m=component.proxy(address)
@@ -39,11 +38,57 @@ local function findModem()
  end
 end
 
+local function setMaxWireless(device)
+ if not device then return false,0 end
+ local hasSet=type(device.setStrength)=="function"
+ local hasGet=type(device.getStrength)=="function"
+ if not hasSet and not hasGet then return false,0 end
+ if hasSet then
+  pcall(function() device.setStrength(M.MAX_WIRELESS_STRENGTH) end)
+ end
+ local strength=0
+ if hasGet then
+  pcall(function() strength=device.getStrength() or 0 end)
+ end
+ return true,tonumber(strength) or 0
+end
+
+local function configureRepeaters()
+ M.relayCount=0
+ M.accessPointCount=0
+ M.relayWirelessCount=0
+
+ -- A Relay can become a wireless repeater when a Tier 1/2 wireless card
+ -- is installed in it. Its OC component is exposed as "relay".
+ for address in component.list("relay",true) do
+  local relay=component.proxy(address)
+  if relay then
+   M.relayCount=M.relayCount+1
+   local ok,strength=setMaxWireless(relay)
+   if ok and strength>0 then M.relayWirelessCount=M.relayWirelessCount+1 end
+   if type(relay.setRepeater)=="function" then
+    pcall(function() relay.setRepeater(true) end)
+   end
+  end
+ end
+
+ -- Access Point is the dedicated wireless bridge. It exposes the
+ -- "access_point" component and has its own wireless range setting.
+ for address in component.list("access_point",true) do
+  local ap=component.proxy(address)
+  if ap then
+   M.accessPointCount=M.accessPointCount+1
+   local ok,strength=setMaxWireless(ap)
+   if ok and strength>0 then M.relayWirelessCount=M.relayWirelessCount+1 end
+   if type(ap.setRepeater)=="function" then
+    pcall(function() ap.setRepeater(true) end)
+   end
+  end
+ end
+end
+
 local function configureWireless(m)
  if not M.wireless then return end
- -- OpenComputers wireless cards need a non-zero signal strength before
- -- wireless packets are transmitted. Try the normal maximum first. Older
- -- or differently configured builds may reject it; keep a safe fallback.
  local ok=pcall(function() m.setStrength(M.MAX_WIRELESS_STRENGTH) end)
  if not ok then
   pcall(function() m.setStrength(16) end)
@@ -54,15 +99,17 @@ local function configureWireless(m)
 end
 
 function M.init(port)
- local m=findModem();if not m then return false,"NO_MODEM" end
+ local m=findModem()
+ if not m then return false,"NO_MODEM" end
  M.PORT=port or M.PORT
  local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
  configureWireless(m)
+ configureRepeaters()
  if M.wireless then
-  return true,"WIRELESS:"..tostring(M.wirelessStrength)..":RELAY_READY"
+  return true,"WIRELESS:"..tostring(M.wirelessStrength)..":RELAYS:"..tostring(M.relayWirelessCount)..":AP:"..tostring(M.accessPointCount)
  end
- return true,"WIRED:RELAY_READY"
+ return true,"WIRED:RELAYS:"..tostring(M.relayWirelessCount)..":AP:"..tostring(M.accessPointCount)
 end
 
 function M.address()
@@ -79,6 +126,7 @@ function M.send(address,kind,data)
  local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
  configureWireless(m)
+ configureRepeaters()
  local sent,sErr=pcall(function() return m.send(address,M.PORT,M.packet(kind,data)) end)
  if not sent then return false,sErr end
  return true
@@ -89,6 +137,7 @@ function M.broadcast(kind,data)
  local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
  configureWireless(m)
+ configureRepeaters()
  local sent,sErr=pcall(function() return m.broadcast(M.PORT,M.packet(kind,data)) end)
  if not sent then return false,sErr end
  return true
@@ -124,10 +173,14 @@ function M.getWirelessStrength()
 end
 
 function M.status()
+ configureRepeaters()
  return {
   wireless=M.wireless,
   wirelessStrength=M:getWirelessStrength(),
   relayReady=M.relayPath,
+  relayCount=M.relayCount,
+  accessPointCount=M.accessPointCount,
+  relayWirelessCount=M.relayWirelessCount,
   port=M.PORT,
   protocol=M.PROTOCOL
  }
@@ -140,6 +193,9 @@ function M.startClient(name,extra)
  M.extra.name=M.name;M.extra.role="CLIENT";M.extra.app=M.name;M.extra.mode=mode
  M.extra.network=M.extra.network~=false
  M.extra.relay=true
+ M.extra.relayCount=M.relayCount
+ M.extra.accessPointCount=M.accessPointCount
+ M.extra.relayWirelessCount=M.relayWirelessCount
  M.broadcast("HELLO",M.extra)
 
  if not M.clientListening then
@@ -170,10 +226,14 @@ function M.startClient(name,extra)
 
  if not M.heartbeatTimer then
   M.heartbeatTimer=event.timer(3,function()
+   configureRepeaters()
    M.broadcast("HEARTBEAT",{
     name=M.name,role="CLIENT",app=M.name,uptime=computer.uptime(),
     wireless=M.wireless,wirelessStrength=M.wirelessStrength,
-    relay=true,relayReady=M.relayPath,lastDistance=M.lastDistance or 0,
+    relay=true,relayReady=M.relayPath,
+    relayCount=M.relayCount,accessPointCount=M.accessPointCount,
+    relayWirelessCount=M.relayWirelessCount,
+    lastDistance=M.lastDistance or 0,
     lastWirelessReceived=M.lastWirelessReceived==true
    })
   end,math.huge)
