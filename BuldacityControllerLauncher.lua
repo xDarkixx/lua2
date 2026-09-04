@@ -1,7 +1,7 @@
 -- BuldacityControllerLauncher.lua
--- Unified network-enabled entry point for Buldacity controllers.
+-- Unified Buldacity controller launcher for OpenComputers 1.7.10.
+-- Network: BULDACITY/2 / port 4242.
 local shell=require("shell")
-local component=require("component")
 local netOk,net=pcall(require,"BuldacityNetworkClient")
 local options={
  {"AE2 Network","AE2Network_Modern.lua"},{"Diesel Generator","DieselGenerator_Modern.lua"},
@@ -18,13 +18,13 @@ local options={
  {"ExtraPlanets","ExtraPlanets_Modern.lua"},{"ExtraPlanets Network","ExtraPlanetsNetwork_Modern.lua"},
  {"Forestry","Forestry_Modern.lua"},{"Forestry Network","ForestryNetwork_Modern.lua"},
  {"Gendustry","Gendustry_Modern.lua"},{"Gendustry Network","GendustryNetwork_Modern.lua"}}
-print("BULDACITY CONTROLLER LAUNCHER // NETWORK")
+print("BULDACITY CONTROLLER LAUNCHER // BULDACITY/2")
 for i,v in ipairs(options) do print(string.format("%2d  %s",i,v[1])) end
 io.write("Select controller: ")
 local n=tonumber(io.read())
 if not n or not options[n] then return end
 local file=options[n][2]
-if not pcall(function() return shell.resolve(file) end) then return end
 local path=shell.resolve(file)
-if netOk and net then pcall(net.start,"BULDACITY // "..options[n][1],"CLIENT",{screen="ACTIVE",controller=file}) end
+if not path then print("Missing controller: "..file); return end
+if netOk and net then pcall(net.start,"BULDACITY // "..options[n][1],"CLIENT",{screen="ACTIVE",controller=file,protocol="BULDACITY/2"}) end
 dofile(path)
