@@ -9,28 +9,13 @@ local computer=require("computer")
 local filesystem=require("filesystem")
 local network=require("Network")
 local gpu=component.gpu
-
 local PROTOCOL="BULDACITY/2"
 local PORT=4242
 local VERSION="5.0"
 local ok,mode=network.startServer()
 if not ok then error("BULDACITY OS: modem/network card required") end
-
-local W,H=gpu.getResolution()
-local running=true
-local page="HOME"
-local selected=1
-local appSelected=1
-local driveSelected=1
-local devices={}
-local logs={}
-local frames={}
-local frameSize={}
-local status="ONLINE"
-local lastInput=0
-local lastFrame=0
-local dirty=true
-
+local W,H=gpu.getResolution();local running=true;local page="HOME";local selected=1;local appSelected=1;local driveSelected=1
+local devices={};local logs={};local frames={};local frameSize={};local status="ONLINE";local lastInput=0;local lastFrame=0;local dirty=true
 local C={bg=0x050811,bar=0x0B1220,panel=0x101A2C,panel2=0x172640,line=0x263B59,cyan=0x00E5FF,purple=0xA66CFF,pink=0xFF3EBB,green=0x35F59A,yellow=0xFFD34E,red=0xFF5572,white=0xEAF6FF,dim=0x71859E,black=0x000000,orange=0xFF9D45}
 local function now() return computer.uptime() end
 local function fit(s,n) s=tostring(s or "");n=math.max(1,n or 1);if #s<=n then return s end;if n==1 then return s:sub(1,1) end;return s:sub(1,n-1).."…" end
@@ -47,11 +32,7 @@ local function hello() network.broadcast("SERVER_HELLO",{name="BULDACITY TIER-3"
 local function scan() hello();for _,d in ipairs(deviceList()) do if online(d) then send(d,"PING",{from="TIER3"}) end end;status="SCAN SENT";log("Network discovery broadcast");dirty=true end
 local function requestScreen(d) if d then send(d,"SCREEN_REQUEST",{width=W,height=H}) end end
 local function fmtBytes(n) n=tonumber(n) or 0;if n>=1073741824 then return string.format("%.1f GB",n/1073741824) end;if n>=1048576 then return string.format("%.1f MB",n/1048576) end;if n>=1024 then return string.format("%.1f KB",n/1024) end;return string.format("%d B",n) end
-local function drives()
- local r={};local it=filesystem.mounts()
- if it then while true do local fs,path=it();if not fs then break end;local total=0;local used=0;pcall(function() total=fs.spaceTotal() or 0 end);pcall(function() used=fs.spaceUsed() or 0 end);local label="";pcall(function() label=fs.getLabel() or "" end);r[#r+1]={fs=fs,path=path,total=total,used=used,label=label} end end
- return r
-end
+local function drives() local r={};local it=filesystem.mounts();if it then while true do local fs,path=it();if not fs then break end;local total=0;local used=0;pcall(function() total=fs.spaceTotal() or 0 end);pcall(function() used=fs.spaceUsed() or 0 end);local label="";pcall(function() label=fs.getLabel() or "" end);r[#r+1]={fs=fs,path=path,total=total,used=used,label=label} end end;return r end
 local function driveInfo(d) if not d then return 0,0,0 end;local total=tonumber(d.total) or 0;local used=tonumber(d.used) or 0;if total<=0 then pcall(function() total=d.fs.spaceTotal() or 0 end) end;if used<=0 then pcall(function() used=d.fs.spaceUsed() or 0 end) end;local pct=total>0 and math.max(0,math.min(100,used/total*100)) or 0;return total,used,pct end
 local function gauge(x,y,w,label,value,maxValue,unit,c) value=tonumber(value) or 0;maxValue=tonumber(maxValue) or 100;local pct=maxValue>0 and math.max(0,math.min(1,value/maxValue)) or 0;text(x,y,label,C.dim);text(x+w-10,y,string.format("%5.1f%s",value,unit or ""),c or C.white);fill(x,y+1,w,2,C.bar);fill(x,y+1,math.max(1,math.floor(w*pct)),2,c or C.cyan) end
 local function header(title,sub) fill(1,1,W,5,C.bar);fill(1,5,W,1,C.cyan);text(3,2,"BULDACITY",C.cyan,C.bar);text(14,2,"OS",C.white,C.bar);text(18,2,title,C.purple,C.bar);text(3,3,sub or "TIER-3 CENTRAL CONTROL",C.dim,C.bar);text(math.max(1,W-25),2,"● NETWORK ONLINE",C.green,C.bar);text(math.max(1,W-14),3,PROTOCOL,C.cyan,C.bar);text(math.max(1,W-8),4,os.date("%H:%M"),C.white,C.bar) end
@@ -70,26 +51,23 @@ local function input(d,eventName,a,b,c) if d then network.send(d.address,"INPUT"
 network.startServer(function(sender,p,distance) if p.kind=="HELLO" or p.kind=="HEARTBEAT" then remember(sender,p,distance);status="CLIENT ONLINE";return end;if p.kind=="PONG" then remember(sender,p,distance);return end;if p.kind=="SCREEN_BEGIN" then local s=p.data or {};frameSize[sender]={w=tonumber(s.width) or W,h=tonumber(s.height) or H};frames[sender]={};dirty=true;return end;if p.kind=="SCREEN_ROW" then local s=p.data or {};if frames[sender] and s.y then frames[sender][s.y]=s.cells end;dirty=true;return end;if p.kind=="SCREEN_END" then local d=devices[sender];if d then d.last=now();d.screen=now() end;lastFrame=now();dirty=true;return end end)
 log("BULDACITY OS "..VERSION.." started");log("Central Tier-3 server on BULDACITY/2 port "..PORT);log("Normal controller PCs are network clients");hello();event.timer(3,hello,math.huge);event.timer(5,scan,math.huge);event.timer(1,function() if page=="REMOTE" then requestScreen(selectedDevice()) end end,math.huge);event.timer(1,function() if dirty then draw() end end,math.huge);draw()
 while running do
- local e,a,b,c,distance=event.pull(0.20)
- if e=="key_down" then
+ local e,a,b,c,d,e2=event.pull(0.20)
+ if e=="key_down" or e=="key_up" then
   local char=b or 0;local code=c or 0;local target=selectedDevice()
-  if char==113 or char==81 then running=false
-  elseif char==49 then page="HOME";draw() elseif char==50 then page="NETWORK";draw() elseif char==51 then page="DEVICES";draw() elseif char==52 then page="APPS";draw() elseif char==53 then page="DISKS";draw() elseif char==54 then page="REMOTE";requestScreen(target);draw() elseif char==55 then page="SYSTEM";draw()
-  elseif char==114 or char==82 then scan();draw()
-  elseif char==119 or code==200 then if page=="DEVICES" then selected=math.max(1,selected-1) elseif page=="APPS" then appSelected=math.max(1,appSelected-1) elseif page=="DISKS" then driveSelected=math.max(1,driveSelected-1) end;draw()
-  elseif char==115 or code==208 then if page=="DEVICES" then selected=selected+1 elseif page=="APPS" then appSelected=appSelected+1 elseif page=="DISKS" then driveSelected=driveSelected+1 end;draw()
-  elseif code==28 or code==57 then
-   if page=="DEVICES" and target then page="REMOTE";requestScreen(target);draw()
-   elseif page=="REMOTE" and target then send(target,"PING",{from="REMOTE"})
-   elseif page=="APPS" then local files=appFiles();local f=files[appSelected];if f then log("Launching "..f);os.execute(f);draw() end end
-  elseif char==27 then page="DEVICES";draw()
-  elseif page=="REMOTE" and target and now()-lastInput>0.03 then input(target,"key_down",char,code);lastInput=now() end
+  if e=="key_down" and (char==113 or char==81) then running=false
+  elseif e=="key_down" and char==49 then page="HOME";draw() elseif e=="key_down" and char==50 then page="NETWORK";draw() elseif e=="key_down" and char==51 then page="DEVICES";draw() elseif e=="key_down" and char==52 then page="APPS";draw() elseif e=="key_down" and char==53 then page="DISKS";draw() elseif e=="key_down" and char==54 then page="REMOTE";requestScreen(target);draw() elseif e=="key_down" and char==55 then page="SYSTEM";draw()
+  elseif e=="key_down" and (char==114 or char==82) then scan();draw()
+  elseif e=="key_down" and (char==119 or code==200) then if page=="DEVICES" then selected=math.max(1,selected-1) elseif page=="APPS" then appSelected=math.max(1,appSelected-1) elseif page=="DISKS" then driveSelected=math.max(1,driveSelected-1) end;draw()
+  elseif e=="key_down" and (char==115 or code==208) then if page=="DEVICES" then selected=selected+1 elseif page=="APPS" then appSelected=appSelected+1 elseif page=="DISKS" then driveSelected=driveSelected+1 end;draw()
+  elseif e=="key_down" and (code==28 or code==57) then if page=="DEVICES" and target then page="REMOTE";requestScreen(target);draw() elseif page=="REMOTE" and target then send(target,"PING",{from="REMOTE"}) elseif page=="APPS" then local files=appFiles();local f=files[appSelected];if f then log("Launching "..f);os.execute(f);draw() end end
+  elseif e=="key_down" and char==27 then page="DEVICES";draw()
+  elseif page=="REMOTE" and target and now()-lastInput>0.03 then input(target,e,char,code);lastInput=now() end
  elseif e=="touch" then
-  local x,y,button=b,c,d,distance;local target=selectedDevice()
+  local x,y,button=b,c,d;local target=selectedDevice()
   if page=="DEVICES" then local idx=y-9;if idx>=1 and idx<=#deviceList() then selected=idx;draw() end
   elseif page=="REMOTE" and target then local sz=frameSize[target.address] or {w=W,h=H};local rx=math.max(1,math.min(sz.w,x-4));local ry=math.max(1,math.min(sz.h,y-10));input(target,"touch",rx,ry,button);lastInput=now() end
  elseif e=="scroll" then
-  local target=selectedDevice();if page=="DEVICES" then if b>0 then selected=selected-1 else selected=selected+1 end;draw() elseif page=="APPS" then if b>0 then appSelected=appSelected-1 else appSelected=appSelected+1 end;draw() elseif page=="DISKS" then if b>0 then driveSelected=driveSelected-1 else driveSelected=driveSelected+1 end;draw() elseif page=="REMOTE" and target then input(target,"scroll",b,c,distance);lastInput=now() end
+  local target=selectedDevice();if page=="DEVICES" then if b>0 then selected=selected-1 else selected=selected+1 end;draw() elseif page=="APPS" then if b>0 then appSelected=appSelected-1 else appSelected=appSelected+1 end;draw() elseif page=="DISKS" then if b>0 then driveSelected=driveSelected-1 else driveSelected=driveSelected+1 end;draw() elseif page=="REMOTE" and target then input(target,"scroll",b,c,d);lastInput=now() end
  end
  if now()-lastInput>0.5 then status="ONLINE" end
 end
