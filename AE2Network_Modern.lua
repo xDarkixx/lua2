@@ -1,6 +1,6 @@
 -- AE2Network_Modern.lua
 -- Futuristic adaptive AE2 HUD for OpenComputers / AE2 rv3 beta 6 / MC 1.7.10
--- Automatically uses the best resolution available from the installed GPU/screen.
+-- Includes live CraftingStatus tracking for crafts started from the HUD.
 local component=require("component")
 local event=require("event")
 local computer=require("computer")
@@ -12,6 +12,8 @@ local W,H=80,25
 local page="HOME"
 local running=true
 local items,crafts,cpus={},{},{}
+local jobs={}
+local selectedCraft=1
 local msg="SYSTEM READY"
 local lastScan=0
 local pulse=0
@@ -41,7 +43,6 @@ local function resize()
   local mw,mh=safe(gpu.maxResolution)
   local cw,ch=safe(gpu.getResolution)
   mw,mh=mw or cw or 80,mh or ch or 25
-  -- Never request a resolution larger than the hardware allows.
   local targetW,targetH=mw,mh
   if targetW<1 then targetW=1 end
   if targetH<1 then targetH=1 end
@@ -99,6 +100,16 @@ local function bar(x,y,w,p,c)
   if n>0 then gpu.setBackground(c or C.cyan);gpu.fill(x,y,n,1," ") end
 end
 
+local function marqueeBar(x,y,w,phase,c)
+  w=math.max(3,w)
+  gpu.setBackground(C.panel2);gpu.fill(x,y,w,1," ")
+  local pos=(phase%(w+6))-6
+  if pos<0 then pos=0 end
+  local n=math.min(8,w)
+  if pos+n>w then n=w-pos end
+  if n>0 then gpu.setBackground(c or C.cyan);gpu.fill(x+pos,y,n,1," ") end
+end
+
 local function button(id,x,y,w,label,c,active)
   w=math.max(3,w)
   ui[id]={x=x,y=y,w=w,h=2}
@@ -146,26 +157,45 @@ local function refresh()
 end
 
 local function cpuInfo(cpu)
-  local busy=objcall(cpu,"isBusy")
-  if busy~=true then return false,"CPU IDLE",0,0,0 end
-  local js=objcall(cpu,"getJobStatus")
-  if type(js)=="table" then
-    local out=js.output or js.result or js.item
-    local n,a=stackData(out)
-    if not n and type(out)=="userdata" then
-      local s=objcall(out,"getItemStack");n,a=stackData(s)
-    end
-    return true,n or "CRAFTING...",a or 0,tonumber(js.craftedAmount or js.crafted or js.completed or 0) or 0,tonumber(js.totalAmount or js.total or 0) or 0
+  if type(cpu)=="table" then
+    local busy=cpu.busy==true
+    return busy,cpu.name or ("CPU "..tostring(1)),tonumber(cpu.storage or 0) or 0,tonumber(cpu.coprocessors or 0) or 0
   end
-  return true,"CRAFTING...",0,0,0
+  local busy=objcall(cpu,"isBusy")
+  return busy==true,"CRAFTING...",0,0
 end
 
-local function systemInfo()
-  local energy,maxEnergy=safe(computer.energy),safe(computer.maxEnergy)
-  local total,free=safe(computer.totalMemory),safe(computer.freeMemory)
-  local depth=safe(gpu.getDepth)
-  local screen=safe(gpu.getScreen)
-  return energy,maxEnergy,total,free,depth,screen
+local function jobState(job)
+  if not job or not job.status then return "SUBMITTING",C.yellow,false,false end
+  local canceled,creason=objcall(job.status,"isCanceled")
+  if canceled==true then return "CANCELED",C.red,false,true,creason end
+  local done,dreason=objcall(job.status,"isDone")
+  if done==true then return "DONE",C.green,true,false,dreason end
+  return "RUNNING",C.cyan,false,false,dreason
+end
+
+local function activeJobCount()
+  local n=0
+  for i=1,#jobs do
+    local state=jobState(jobs[i])
+    if state=="RUNNING" or state=="SUBMITTING" then n=n+1 end
+  end
+  return n
+end
+
+local function requestCraft(index,count)
+  local c=crafts[index]
+  if not c then msg="NO CRAFTABLE SELECTED";return end
+  count=math.max(1,math.floor(tonumber(count) or 1))
+  local name=craftData(c)
+  local status,reason=objcall(c,"request",count,true)
+  if status then
+    table.insert(jobs,1,{status=status,name=name,requested=count,started=computer.uptime(),id=computer.uptime()})
+    msg="CRAFT STARTED: "..fit(name,math.max(8,W-22))
+    page="JOBS"
+  else
+    msg="CRAFT FAILED: "..tostring(reason or "UNKNOWN ERROR")
+  end
 end
 
 local function header(title)
@@ -179,13 +209,14 @@ end
 
 local function footer()
   local y=math.max(1,H-3)
-  local n=6
+  local n=7
   local gap=1
   local bw=math.max(3,math.floor((W-4-(n-1)*gap)/n))
   local x=2
   button("home",x,y,bw,"HOME",C.purple,page=="HOME");x=x+bw+gap
   button("items",x,y,bw,"ITEMS",C.cyan,page=="ITEMS");x=x+bw+gap
   button("craft",x,y,bw,"CRAFT",C.pink,page=="CRAFTS");x=x+bw+gap
+  button("jobs",x,y,bw,"JOBS",C.green,page=="JOBS");x=x+bw+gap
   button("system",x,y,bw,"PC",C.blue,page=="SYSTEM");x=x+bw+gap
   button("refresh",x,y,bw,"SCAN",C.yellow);x=x+bw+gap
   button("quit",x,y,bw,"EXIT",C.red)
@@ -205,9 +236,7 @@ local function drawHome()
   txt(6,cy+6,"ITEM TYPES",C.grey,C.panel);txt(math.min(27,pw-8),cy+6,#items,C.cyan,C.panel)
   txt(6,cy+8,"CRAFTABLES",C.grey,C.panel);txt(math.min(27,pw-8),cy+8,#crafts,C.pink,C.panel)
   txt(6,cy+10,"CPUs",C.grey,C.panel);txt(math.min(27,pw-8),cy+10,#cpus,C.yellow,C.panel)
-  local busy=0
-  for i=1,#cpus do local b=cpuInfo(cpus[i]);if b then busy=busy+1 end end
-  txt(6,cy+12,"ACTIVE JOBS",C.grey,C.panel);txt(math.min(27,pw-8),cy+12,busy,C.green,C.panel)
+  txt(6,cy+12,"ACTIVE JOBS",C.grey,C.panel);txt(math.min(27,pw-8),cy+12,activeJobCount(),C.green,C.panel)
   txt(6,cy+14,"SCAN AGE",C.grey,C.panel);txt(math.min(27,pw-8),cy+14,string.format("%.1fs",computer.uptime()-lastScan),C.white,C.panel)
   if ph>=18 then
     txt(6,cy+16,"NETWORK LOAD",C.grey,C.panel)
@@ -245,36 +274,76 @@ local function drawItems()
 end
 
 local function drawCrafts()
-  header("CRAFTING MATRIX // RECIPES + JOBS")
+  header("CRAFTING MATRIX // SELECT + START")
   local y=6;local h=math.max(4,H-10);local w=W-6
-  panel(3,y,w,h,"CRAFTABLE OUTPUTS",C.pink)
-  local rows=math.max(1,math.floor((h-5)/2))
-  for i=1,math.min(rows,#crafts) do
-    local yy=y+2+i*2
+  local left=math.max(24,math.floor(w*0.62))
+  local right=w-left-2
+  panel(3,y,left,h,"CRAFTABLE RECIPES",C.pink)
+  local rows=math.max(1,math.min(#crafts,h-5))
+  for i=1,rows do
+    local yy=y+1+i
     local n,a=craftData(crafts[i])
-    txt(6,yy,string.format("%02d",i),C.cyan,C.panel)
-    txt(11,yy,fit(n,math.max(8,w-38)),C.white,C.panel)
-    txt(math.max(1,W-22),yy,"x"..tostring(a),C.pink,C.panel)
+    local active=i==selectedCraft
+    if active then
+      gpu.setBackground(C.panel2);gpu.fill(4,yy,left-2,1," ")
+    end
+    txt(6,yy,string.format("%02d",i),active and C.yellow or C.cyan,C.panel)
+    txt(11,yy,fit(n,math.max(8,left-28)),C.white,C.panel)
+    txt(11+math.max(8,left-28)+1,yy,"x"..tostring(a),C.pink,C.panel)
   end
-  local start=math.max(y+3,y+h-6)
-  txt(6,start,"ACTIVE CPU JOBS",C.grey,C.panel)
-  local shown=0
-  for i=1,#cpus do
-    local b,n,a,done,total=cpuInfo(cpus[i])
-    if b and shown<3 and start+shown+1<H-3 then
-      shown=shown+1
-      local yy=start+shown
-      txt(7,yy,"●",C.green,C.panel)
-      txt(11,yy,fit(n,math.max(8,w-35)),C.white,C.panel)
-      if total>0 then
-        local pct=done/total*100
-        bar(math.max(11,W-42),yy,math.max(5,24),pct,C.green)
+  if #crafts==0 then txt(7,y+4,"NO CRAFTABLE RECIPES",C.red,C.panel) end
+
+  local x=3+left+2
+  panel(x,y,right,h,"CRAFT CONSOLE",C.green)
+  local n,a=craftData(crafts[selectedCraft])
+  txt(x+3,y+3,"SELECTED",C.grey,C.panel)
+  txt(x+3,y+5,fit(n,math.max(8,right-6)),C.white,C.panel)
+  txt(x+3,y+7,"OUTPUT",C.grey,C.panel);txt(x+14,y+7,"x"..tostring(a),C.pink,C.panel)
+  txt(x+3,y+9,"QUICK REQUEST",C.grey,C.panel)
+  local bw=math.max(5,math.floor((right-8)/3))
+  button("craft1",x+3,y+11,bw,"x1",C.cyan)
+  button("craft16",x+4+bw,y+11,bw,"x16",C.blue)
+  button("craft64",x+5+bw*2,y+11,bw,"x64",C.purple)
+  if h>=18 then
+    txt(x+3,y+14,"LIVE JOBS",C.grey,C.panel)
+    txt(x+3,y+16,tostring(activeJobCount()).." RUNNING",C.green,C.panel)
+    txt(x+3,y+18,"Tap JOBS for details",C.cyan,C.panel)
+  end
+  footer()
+end
+
+local function drawJobs()
+  header("CRAFTING CORE // LIVE PROCESS MONITOR")
+  local y=6;local h=math.max(4,H-10);local w=W-6
+  panel(3,y,w,h,"ACTIVE + RECENT CRAFTING",C.green)
+  local yy=y+2
+  if #jobs==0 then
+    txt(7,yy,"NO HUD-TRACKED CRAFTS",C.grey,C.panel)
+    txt(7,yy+2,"Select a recipe in CRAFT and start x1/x16/x64.",C.cyan,C.panel)
+  else
+    local maxRows=math.max(1,h-5)
+    for i=1,math.min(maxRows,#jobs) do
+      local j=jobs[i]
+      local state,color,done,canceled,reason=jobState(j)
+      txt(6,yy,string.format("%02d",i),C.cyan,C.panel)
+      txt(11,yy,fit(j.name,math.max(8,w-50)),C.white,C.panel)
+      txt(math.max(1,W-29),yy,"x"..tostring(j.requested),C.yellow,C.panel)
+      txt(math.max(1,W-16),yy,state,color,C.panel)
+      if state=="RUNNING" or state=="SUBMITTING" then
+        marqueeBar(11,yy+1,math.max(8,w-16),pulse*2,C.cyan)
+        txt(11,yy+2,"ELAPSED",C.grey,C.panel)
+        txt(20,yy+2,string.format("%.1fs",computer.uptime()-j.started),C.white,C.panel)
+        txt(31,yy+2,"LIVE STATUS",C.green,C.panel)
+      elseif state=="DONE" then
+        txt(11,yy+1,"✓ CRAFT COMPLETE",C.green,C.panel)
+        txt(11,yy+2,string.format("TOTAL REQUEST: %d",j.requested),C.grey,C.panel)
       else
-        txt(math.max(1,W-22),yy,"RUNNING",C.green,C.panel)
+        txt(11,yy+1,"× "..fit(reason or "REQUEST CANCELED",w-14),C.red,C.panel)
       end
+      yy=yy+4
+      if yy>y+h-4 then break end
     end
   end
-  if shown==0 and start+1<H then txt(7,start+1,"NO ACTIVE CRAFTING JOB",C.grey,C.panel) end
   footer()
 end
 
@@ -282,7 +351,10 @@ local function drawSystem()
   header("PC // OPENCOMPUTERS SYSTEM MONITOR")
   local y=6;local h=math.max(4,H-10);local w=W-6
   panel(3,y,w,h,"COMPUTER CORE",C.blue)
-  local energy,maxEnergy,total,free,depth,screen=systemInfo()
+  local energy,maxEnergy=safe(computer.energy),safe(computer.maxEnergy)
+  local total,free=safe(computer.totalMemory),safe(computer.freeMemory)
+  local depth=safe(gpu.getDepth)
+  local screen=safe(gpu.getScreen)
   txt(6,y+3,"UPTIME",C.grey,C.panel);txt(24,y+3,string.format("%.1fs",computer.uptime()),C.cyan,C.panel)
   txt(6,y+5,"CLOCK",C.grey,C.panel);txt(24,y+5,os.date("%H:%M:%S"),C.white,C.panel)
   if energy and maxEnergy then
@@ -309,6 +381,7 @@ local function draw()
   if page=="HOME" then drawHome()
   elseif page=="ITEMS" then drawItems()
   elseif page=="CRAFTS" then drawCrafts()
+  elseif page=="JOBS" then drawJobs()
   else drawSystem() end
 end
 
@@ -316,14 +389,31 @@ local function click(x,y)
   if hit("home",x,y) then page="HOME"
   elseif hit("items",x,y) then page="ITEMS"
   elseif hit("craft",x,y) then page="CRAFTS"
+  elseif hit("jobs",x,y) then page="JOBS"
   elseif hit("system",x,y) then page="SYSTEM"
   elseif hit("refresh",x,y) then refresh()
-  elseif hit("quit",x,y) then running=false end
+  elseif hit("quit",x,y) then running=false
+  elseif page=="CRAFTS" then
+    local y0=7
+    local h=math.max(4,H-10)
+    local left=math.max(24,math.floor((W-6)*0.62))
+    local right=(W-6)-left-2
+    if x>=4 and x<=2+left and y>=y0 and y<y0+math.max(1,math.min(#crafts,h-5)) then
+      local i=y-y0+1
+      if crafts[i] then selectedCraft=i;msg="SELECTED: "..craftData(crafts[i]) end
+    else
+      local cx=3+left+2
+      local bw=math.max(5,math.floor((right-8)/3))
+      if hit("craft1",x,y) then requestCraft(selectedCraft,1)
+      elseif hit("craft16",x,y) then requestCraft(selectedCraft,16)
+      elseif hit("craft64",x,y) then requestCraft(selectedCraft,64) end
+    end
+  end
 end
 
 resize();refresh();draw()
 while running do
-  local e,a,x,y=event.pull(1)
+  local e,a,x,y=event.pull(0.5)
   if e=="touch" then click(x,y);draw()
   elseif e=="key_down" then
     local c=y
@@ -331,6 +421,7 @@ while running do
     elseif c==string.byte("r") or c==string.byte("R") then refresh()
     elseif c==string.byte("i") or c==string.byte("I") then page="ITEMS"
     elseif c==string.byte("c") or c==string.byte("C") then page="CRAFTS"
+    elseif c==string.byte("j") or c==string.byte("J") then page="JOBS"
     elseif c==string.byte("p") or c==string.byte("P") then page="SYSTEM" end
     draw()
   end
