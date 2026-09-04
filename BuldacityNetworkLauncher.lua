@@ -1,9 +1,10 @@
 -- BuldacityNetworkLauncher.lua
 -- Common helper used by Buldacity controller wrappers.
+-- BULDACITY/2 over the shared BuldacityWireless transport.
 local M={}
 function M.run(app,core)
   local ok,net=pcall(require,"BuldacityNetworkClient")
-  if ok and net then pcall(net.start,app,"CLIENT",{screen="ACTIVE",version="BULDACITY/1"}) end
+  if ok and net then pcall(net.start,app,"CLIENT",{screen="ACTIVE",version="BULDACITY/2"}) end
   local shellOk,shell=pcall(require,"shell")
   if shellOk and shell then
     local path=shell.resolve(core)
