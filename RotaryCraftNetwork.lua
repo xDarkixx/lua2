@@ -3,6 +3,7 @@
 -- Minecraft 1.7.10 / RotaryCraft V33a / OpenComputers
 
 local Network=require("Network")
+local shell=require("shell")
 local ok,mode=Network.startClient("RotaryCraft // Control Center",{
   controller="RotaryCraft.lua",
   mod="RotaryCraft",
@@ -13,4 +14,4 @@ if not ok then
   io.stderr:write("BULDACITY Network unavailable: "..tostring(mode).."\n")
 end
 
-dofile("RotaryCraft.lua")
+dofile(shell.resolve("RotaryCraft.lua"))
