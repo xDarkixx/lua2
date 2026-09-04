@@ -1,9 +1,6 @@
 -- Buldacity / Immersive Railroading 1.7.10-forge-1.9.1
--- Generic live OC dashboard: only runtime-exposed components/methods are shown.
-local component=require("component"); local computer=require("computer"); local event=require("event"); local gpu=component.gpu
-local W,H=gpu.getResolution(); local function fit(s,n) s=tostring(s or ""); return #s>n and s:sub(1,n-3).."..." or s end
-local function scan() local r={}; for a,t in component.list() do local ok,m=pcall(component.methods,a); local s=tostring(t):lower(); local score=(s:find("rail") and 10 or 0); if ok and m then for k,_ in pairs(m) do local x=tostring(k):lower(); if x:find("train") or x:find("rail") or x:find("track") or x:find("locom") then score=score+2 end end end; if score>0 then table.insert(r,{addr=a,typ=tostring(t),methods=m or {}}) end end; return r end
-local dev=scan(); local page="HOME"; local last=0
-local function draw() gpu.setBackground(0x080C14); gpu.setForeground(0x66FFFF); gpu.fill(1,1,W,H," "); gpu.set(2,1,"BULDACITY // IMMERSIVE RAILROADING // "..page); if page=="HOME" then gpu.set(2,3,"Version: 1.7.10-forge-1.9.1"); gpu.set(2,5,"Live OC scan: ON"); gpu.set(2,7,"Detected rail components: "..#dev); gpu.set(2,9,"Only functionality exposed by your installed OC integration is shown.") else local y=3; for _,c in ipairs(dev) do if y>H-4 then break end; gpu.set(2,y,c.typ.." @"..c.addr:sub(1,12)); y=y+1; for m,_ in pairs(c.methods) do if y>H-4 then break end; gpu.set(4,y,"• "..fit(m,W-6)); y=y+1 end end end; gpu.set(2,H-3,"[HOME] [API] [REFRESH]   R=scan   Q=exit") end
-draw()
-while true do if computer.uptime()-last>=2 then last=computer.uptime(); dev=scan(); draw() end; local e={event.pull(1)}; if e[1]=="key_down" then if e[3]==16 or e[3]==28 then break elseif e[3]==19 then dev=scan(); draw() end elseif e[1]=="touch" and e[4]>=H-3 then local x=e[3]; if x<W/3 then page="HOME" elseif x<2*W/3 then page="API" else dev=scan(); page="HOME" end; draw() elseif e[1]=="interrupted" then break end end
+local Dashboard=require("BuldacityComponentDashboard")
+Dashboard.run({
+ id="RAILROADING",title="IMMERSIVE RAILROADING",subtitle="1.7.10-forge-1.9.1 // live OC integration",accent=0xFF9F4A,
+ filters={"rail","train","track","locom"}
+})
