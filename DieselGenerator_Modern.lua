@@ -1,23 +1,297 @@
 -- DieselGenerator_Modern.lua
--- Adaptive NEON HUD / Immersive Engineering Diesel Generator / OC 1.8.10 / MC 1.7.10
-local component=require("component") local event=require("event") local computer=require("computer")
-local gpu=component.gpu local gen=component.ie_diesel_generator if not gen then error("Kein ie_diesel_generator gefunden.") end
-local W,H=80,25 local page="HOME" local mode="AUTO" local enabled=false local active=false local amount=0 local capacity=0 local fluid="--" local msg="SYSTEM READY" local run=true local pulse=0 local ui={}
-local C={bg=0x03060B,panel=0x0A111B,panel2=0x101C29,line=0x214057,cyan=0x35E8FF,blue=0x438CFF,green=0x35FF9A,red=0xFF466D,yellow=0xFFE36A,purple=0xC56BFF,pink=0xFF4CCB,orange=0xFF9D45,white=0xF3FAFF,grey=0x7D96AA,off=0x263541}
-local function safe(f,...) local ok,a,b,c=pcall(f,...);if ok then return a,b,c end end
-local function resize() local mw,mh=safe(gpu.maxResolution);local cw,ch=safe(gpu.getResolution);mw=mw or cw or 80;mh=mh or ch or 25;safe(gpu.setResolution,mw,mh);W,H=safe(gpu.getResolution);W=W or mw;H=H or mh end
-local function txt(x,y,s,fg,bg)if x<1 or y<1 or x>W or y>H then return end;gpu.setForeground(fg or C.white);gpu.setBackground(bg or C.bg);gpu.set(x,y,tostring(s))end
-local function fit(s,n)s=tostring(s or "");n=math.max(1,n or 1);return #s<=n and s or (n==1 and s:sub(1,1) or s:sub(1,n-1).."…") end
-local function panel(x,y,w,h,t,c)gpu.setBackground(C.panel);gpu.fill(x,y,w,h," ");gpu.setBackground(c);gpu.fill(x,y,w,1," ");txt(x+2,y,"◆ "..fit(t,w-5),C.white,c) end
-local function led(x,y,on,c,t)local cc=on and c or C.off;gpu.setBackground(cc);gpu.fill(x,y,2,1," ");txt(x+3,y,fit(t or "OFFLINE",W-x-3),on and cc or C.grey,C.panel)end
-local function bar(x,y,w,p,c)p=math.max(0,math.min(100,tonumber(p)or 0));gpu.setBackground(C.panel2);gpu.fill(x,y,w,1," ");local n=math.floor(w*p/100);if n>0 then gpu.setBackground(c);gpu.fill(x,y,n,1," ")end end
-local function btn(id,x,y,w,t,c,on)ui[id]={x=x,y=y,w=w,h=2};gpu.setBackground(on and C.white or c);gpu.fill(x,y,w,2," ");txt(x+math.max(1,math.floor((w-#t)/2)),y,fit(t,w-2),on and c or C.white,on and C.white or c)end
-local function hit(id,x,y)local b=ui[id];return b and x>=b.x and x<b.x+b.w and y>=b.y and y<b.y+b.h end
-local function read()active=safe(gen.isActive)==true;local info=safe(gen.getTankInfo);local t=type(info)=="table" and (info[1] or info) or nil;if type(t)=="table" then capacity=tonumber(t.capacity)or 0;local f=t.fluid;if type(f)=="table" then amount=tonumber(f.amount)or 0;fluid=tostring(f.name or "--")else amount=0;fluid=tostring(f or "--")end end;if mode=="AUTO" and capacity>0 then local p=amount/capacity*100;if p<=10 and enabled then safe(gen.setEnabled,false);enabled=false;msg="AUTO: LOW FUEL" elseif p>=20 and not enabled then safe(gen.setEnabled,true);enabled=true;msg="AUTO: FUEL OK" end end end
-local function set(v)mode="MANUAL";enabled=v;safe(gen.setEnabled,v);msg=v and "GENERATOR ENABLED" or "GENERATOR DISABLED" end
-local function header(t)local blink=pulse%2==0;gpu.setBackground(C.panel);gpu.fill(1,1,W,4," ");txt(2,1,"╔ DIESEL // NEON CORE ╗",C.orange,C.panel);txt(3,2,fit(t,W-32),C.white,C.panel);led(math.max(5,W-25),2,active,blink and C.green or C.cyan,"RUNNING");gpu.setBackground(C.orange);gpu.fill(1,4,W,1," ") end
-local function footer()local y=H-3;local n=6;local gap=1;local bw=math.max(3,math.floor((W-4-(n-1)*gap)/n));local x=2;btn("home",x,y,bw,"HOME",C.purple,page=="HOME");x=x+bw+gap;btn("auto",x,y,bw,"AUTO",C.purple,mode=="AUTO");x=x+bw+gap;btn("on",x,y,bw,"ON",C.green,mode=="MANUAL"and enabled);x=x+bw+gap;btn("off",x,y,bw,"OFF",C.red,mode=="MANUAL"and not enabled);x=x+bw+gap;btn("scan",x,y,bw,"SCAN",C.yellow);x=x+bw+gap;btn("exit",x,y,bw,"EXIT",C.red);txt(2,H,fit(msg,W-4),C.grey,C.bg)end
-local function drawHome()header("POWER PLANT // LIVE");local p=capacity>0 and amount/capacity*100 or 0;local fc=p<=10 and C.red or p<20 and C.yellow or C.green;local y=6;local h=H-10;local two=W>=76;local gap=2;local pw=two and math.floor((W-6-gap)/2)or W-6;panel(3,y,pw,h,"GENERATOR CORE",active and C.green or C.red);led(6,y+3,active,C.green,active and "GENERATOR ACTIVE" or "GENERATOR STOPPED");led(6,y+5,mode=="AUTO",C.purple,mode=="AUTO" and "AUTO CONTROL" or "MANUAL CONTROL");txt(6,y+8,"FUEL",C.grey,C.panel);txt(22,y+8,string.format("%.0f / %.0f mB",amount,capacity),fc,C.panel);bar(6,y+9,pw-8,p,fc);txt(6,y+11,"LEVEL",C.grey,C.panel);txt(22,y+11,string.format("%.1f%%",p),fc,C.panel);txt(6,y+13,"FLUID",C.grey,C.panel);txt(22,y+13,fit(fluid,pw-25),C.white,C.panel);if two then local x=3+pw+gap;panel(x,y,pw,h,"AUTOMATION MATRIX",C.purple);txt(x+4,y+3,"LOW LIMIT",C.grey,C.panel);txt(x+22,y+3,"10 %",C.red,C.panel);txt(x+4,y+5,"HIGH LIMIT",C.grey,C.panel);txt(x+22,y+5,"20 %",C.green,C.panel);led(x+4,y+8,enabled,C.green,enabled and "OUTPUT ENABLED" or "OUTPUT DISABLED");txt(x+4,y+11,"FUEL RESERVE",C.grey,C.panel);bar(x+4,y+12,pw-8,p,C.orange);txt(x+4,y+14,"HUD",C.grey,C.panel);txt(x+22,y+14,(W>=150 and "ULTRA 160x50" or W>=75 and "WIDE" or "COMPACT"),C.cyan,C.panel)end;footer()end
-local function draw()resize();gpu.setBackground(C.bg);gpu.fill(1,1,W,H," ");drawHome()end
-resize();read();draw();while run do local e,a,x,y=event.pull(1);if e=="touch"then if hit("home",x,y)then page="HOME"elseif hit("auto",x,y)then mode="AUTO";msg="AUTOMATIC CONTROL ON"elseif hit("on",x,y)then set(true)elseif hit("off",x,y)then set(false)elseif hit("scan",x,y)then msg="STATUS UPDATED"elseif hit("exit",x,y)then run=false end;read();draw()elseif e=="key_down"then local c=y;if c==string.byte("q")or c==string.byte("Q")then run=false elseif c==string.byte("a")or c==string.byte("A")then mode="AUTO" elseif c==string.byte("m")or c==string.byte("M")then set(true)elseif c==string.byte("o")or c==string.byte("O")then set(false)end;read();draw()end;pulse=pulse+1 end
-gpu.setBackground(C.bg);gpu.fill(1,1,W,H," ")
+-- BULDACITY NEON HUD / Immersive Engineering Diesel Generator / OpenComputers / MC 1.7.10
+-- Robust component discovery: does NOT require ie_diesel_generator to be the OC primary component.
+
+local component=require("component")
+local event=require("event")
+local gpu=component.gpu
+
+local W,H=80,25
+local page="HOME"
+local mode="AUTO"
+local enabled=false
+local active=false
+local amount=0
+local capacity=0
+local fluid="--"
+local msg="SYSTEM READY"
+local run=true
+local pulse=0
+local ui={}
+local gen=nil
+local genAddress=nil
+
+local C={
+ bg=0x03060B,panel=0x0A111B,panel2=0x101C29,line=0x214057,
+ cyan=0x35E8FF,blue=0x438CFF,green=0x35FF9A,red=0xFF466D,
+ yellow=0xFFE36A,purple=0xC56BFF,pink=0xFF4CCB,orange=0xFF9D45,
+ white=0xF3FAFF,grey=0x7D96AA,off=0x263541
+}
+
+local function safe(f,...)
+ local ok,a,b,c,d=pcall(f,...)
+ if ok then return a,b,c,d end
+ return nil
+end
+
+-- Never use component.ie_diesel_generator here: that syntax asks OpenComputers
+-- for the PRIMARY component and crashes when no primary is registered.
+local function discoverGenerator()
+ gen=nil
+ genAddress=nil
+ for address in component.list("ie_diesel_generator",true) do
+  genAddress=address
+  gen=component.proxy(address)
+  break
+ end
+ if gen then
+  msg="DIESEL GENERATOR DETECTED"
+ else
+  msg="NO ie_diesel_generator COMPONENT"
+ end
+end
+
+local function resize()
+ local mw,mh=safe(gpu.maxResolution)
+ local cw,ch=safe(gpu.getResolution)
+ mw=mw or cw or 80
+ mh=mh or ch or 25
+ safe(gpu.setResolution,mw,mh)
+ W,H=safe(gpu.getResolution)
+ W=W or mw
+ H=H or mh
+end
+
+local function txt(x,y,s,fg,bg)
+ if x<1 or y<1 or x>W or y>H then return end
+ gpu.setForeground(fg or C.white)
+ gpu.setBackground(bg or C.bg)
+ gpu.set(x,y,tostring(s))
+end
+
+local function fit(s,n)
+ s=tostring(s or "")
+ n=math.max(1,n or 1)
+ if #s<=n then return s end
+ if n==1 then return s:sub(1,1) end
+ return s:sub(1,n-1).."…"
+end
+
+local function panel(x,y,w,h,t,c)
+ if w<1 or h<1 then return end
+ gpu.setBackground(C.panel)
+ gpu.fill(x,y,w,h," ")
+ gpu.setBackground(c)
+ gpu.fill(x,y,w,1," ")
+ txt(x+2,y,"◆ "..fit(t,w-5),C.white,c)
+end
+
+local function led(x,y,on,c,t)
+ local cc=on and c or C.off
+ gpu.setBackground(cc)
+ gpu.fill(x,y,2,1," ")
+ txt(x+3,y,fit(t or "OFFLINE",math.max(1,W-x-3)),on and cc or C.grey,C.panel)
+end
+
+local function bar(x,y,w,p,c)
+ w=math.max(1,w)
+ p=math.max(0,math.min(100,tonumber(p) or 0))
+ gpu.setBackground(C.panel2)
+ gpu.fill(x,y,w,1," ")
+ local n=math.floor(w*p/100)
+ if n>0 then
+  gpu.setBackground(c)
+  gpu.fill(x,y,n,1," ")
+ end
+end
+
+local function btn(id,x,y,w,t,c,on)
+ w=math.max(5,w)
+ ui[id]={x=x,y=y,w=w,h=2}
+ gpu.setBackground(on and C.white or c)
+ gpu.fill(x,y,w,2," ")
+ txt(x+math.max(1,math.floor((w-#t)/2)),y,fit(t,w-2),on and c or C.white,on and C.white or c)
+end
+
+local function hit(id,x,y)
+ local b=ui[id]
+ return b and x>=b.x and x<b.x+b.w and y>=b.y and y<b.y+b.h
+end
+
+local function readGenerator()
+ if not gen then
+  discoverGenerator()
+  if not gen then
+   active=false
+   amount=0
+   capacity=0
+   fluid="--"
+   return
+  end
+ end
+
+ active=safe(gen.isActive)==true
+ local info=safe(gen.getTankInfo)
+ local t=type(info)=="table" and (info[1] or info) or nil
+
+ if type(t)=="table" then
+  capacity=tonumber(t.capacity) or 0
+  local f=t.fluid
+  if type(f)=="table" then
+   amount=tonumber(f.amount) or 0
+   fluid=tostring(f.name or "--")
+  else
+   amount=0
+   fluid=tostring(f or "--")
+  end
+ else
+  amount=0
+  capacity=0
+  fluid="--"
+ end
+
+ if mode=="AUTO" and capacity>0 then
+  local p=amount/capacity*100
+  if p<=10 and enabled then
+   local ok=safe(gen.setEnabled,false)
+   if ok~=nil then enabled=false end
+   msg="AUTO: LOW FUEL"
+  elseif p>=20 and not enabled then
+   local ok=safe(gen.setEnabled,true)
+   if ok~=nil then enabled=true end
+   msg="AUTO: FUEL OK"
+  end
+ end
+end
+
+local function setGenerator(v)
+ if not gen then
+  discoverGenerator()
+  if not gen then
+   msg="NO DIESEL GENERATOR"
+   return
+  end
+ end
+ mode="MANUAL"
+ local result=safe(gen.setEnabled,v)
+ enabled=v
+ if result==nil then
+  msg="GENERATOR COMMAND FAILED"
+ else
+  msg=v and "GENERATOR ENABLED" or "GENERATOR DISABLED"
+ end
+end
+
+local function header(t)
+ local blink=pulse%2==0
+ gpu.setBackground(C.panel)
+ gpu.fill(1,1,W,4," ")
+ txt(2,1,"╔ BULDACITY // DIESEL CORE ╗",C.orange,C.panel)
+ txt(3,2,fit(t,math.max(10,W-32)),C.white,C.panel)
+ led(math.max(5,W-25),2,active,blink and C.green or C.cyan,"RUNNING")
+ gpu.setBackground(C.orange)
+ gpu.fill(1,4,W,1," ")
+end
+
+local function footer()
+ local y=math.max(1,H-3)
+ local n=6
+ local gap=1
+ local bw=math.max(5,math.floor((W-4-(n-1)*gap)/n))
+ local x=2
+ btn("home",x,y,bw,"HOME",C.purple,page=="HOME");x=x+bw+gap
+ btn("auto",x,y,bw,"AUTO",C.purple,mode=="AUTO");x=x+bw+gap
+ btn("on",x,y,bw,"ON",C.green,mode=="MANUAL" and enabled);x=x+bw+gap
+ btn("off",x,y,bw,"OFF",C.red,mode=="MANUAL" and not enabled);x=x+bw+gap
+ btn("scan",x,y,bw,"SCAN",C.yellow);x=x+bw+gap
+ btn("exit",x,y,bw,"EXIT",C.red)
+ txt(2,H,fit(msg,math.max(1,W-4)),C.grey,C.bg)
+end
+
+local function drawHome()
+ header("POWER PLANT // LIVE")
+ local p=capacity>0 and amount/capacity*100 or 0
+ local fc=p<=10 and C.red or p<20 and C.yellow or C.green
+ local y=6
+ local h=math.max(4,H-10)
+ local two=W>=76
+ local gap=2
+ local pw=two and math.floor((W-6-gap)/2) or W-6
+ pw=math.max(20,pw)
+
+ panel(3,y,pw,h,"GENERATOR CORE",active and C.green or C.red)
+
+ if not gen then
+  txt(6,y+3,"NO DIESEL GENERATOR LINK",C.red,C.panel)
+  txt(6,y+5,"Attach the IE OpenComputers",C.grey,C.panel)
+  txt(6,y+6,"compatible component and SCAN.",C.grey,C.panel)
+ else
+  led(6,y+3,active,C.green,active and "GENERATOR ACTIVE" or "GENERATOR STOPPED")
+  led(6,y+5,mode=="AUTO",C.purple,mode=="AUTO" and "AUTO CONTROL" or "MANUAL CONTROL")
+  txt(6,y+8,"FUEL",C.grey,C.panel)
+  txt(22,y+8,string.format("%.0f / %.0f mB",amount,capacity),fc,C.panel)
+  bar(6,y+9,pw-8,p,fc)
+  txt(6,y+11,"LEVEL",C.grey,C.panel)
+  txt(22,y+11,string.format("%.1f%%",p),fc,C.panel)
+  txt(6,y+13,"FLUID",C.grey,C.panel)
+  txt(22,y+13,fit(fluid,math.max(1,pw-25)),C.white,C.panel)
+ end
+
+ if two then
+  local x=3+pw+gap
+  panel(x,y,pw,h,"AUTOMATION MATRIX",C.purple)
+  txt(x+4,y+3,"LOW LIMIT",C.grey,C.panel)
+  txt(x+22,y+3,"10 %",C.red,C.panel)
+  txt(x+4,y+5,"HIGH LIMIT",C.grey,C.panel)
+  txt(x+22,y+5,"20 %",C.green,C.panel)
+  led(x+4,y+8,enabled,C.green,enabled and "OUTPUT ENABLED" or "OUTPUT DISABLED")
+  txt(x+4,y+11,"FUEL RESERVE",C.grey,C.panel)
+  bar(x+4,y+12,pw-8,p,C.orange)
+  txt(x+4,y+14,"COMPONENT",C.grey,C.panel)
+  txt(x+22,y+14,genAddress and fit(genAddress,math.max(1,pw-25)) or "NOT FOUND",genAddress and C.cyan or C.red,C.panel)
+  txt(x+4,y+16,"HUD",C.grey,C.panel)
+  txt(x+22,y+16,(W>=150 and "ULTRA 160x50" or W>=75 and "WIDE" or "COMPACT"),C.cyan,C.panel)
+ end
+ footer()
+end
+
+local function draw()
+ resize()
+ gpu.setBackground(C.bg)
+ gpu.fill(1,1,W,H," ")
+ ui={}
+ drawHome()
+end
+
+resize()
+discoverGenerator()
+readGenerator()
+draw()
+
+while run do
+ local e,a,x,y=event.pull(1)
+ if e=="touch" then
+  if hit("home",x,y) then page="HOME"
+  elseif hit("auto",x,y) then mode="AUTO";msg="AUTOMATIC CONTROL ON"
+  elseif hit("on",x,y) then setGenerator(true)
+  elseif hit("off",x,y) then setGenerator(false)
+  elseif hit("scan",x,y) then discoverGenerator();readGenerator();msg=gen and "DIESEL COMPONENT FOUND" or "NO ie_diesel_generator FOUND"
+  elseif hit("exit",x,y) then run=false end
+  readGenerator()
+  draw()
+ elseif e=="key_down" then
+  local c=y
+  if c==string.byte("q") or c==string.byte("Q") then run=false
+  elseif c==string.byte("a") or c==string.byte("A") then mode="AUTO";msg="AUTOMATIC CONTROL ON"
+  elseif c==string.byte("m") or c==string.byte("M") then setGenerator(true)
+  elseif c==string.byte("o") or c==string.byte("O") then setGenerator(false)
+  elseif c==string.byte("s") or c==string.byte("S") then discoverGenerator();msg=gen and "DIESEL COMPONENT FOUND" or "NO ie_diesel_generator FOUND"
+  end
+  readGenerator()
+  draw()
+ end
+ pulse=pulse+1
+end
+
+gpu.setBackground(C.bg)
+gpu.fill(1,1,W,H," ")
