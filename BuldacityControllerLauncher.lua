@@ -1,6 +1,7 @@
 -- BuldacityControllerLauncher.lua
--- Unified network-enabled entry point for the Buldacity controllers.
+-- Unified network-enabled entry point for Buldacity controllers.
 local shell=require("shell")
+local component=require("component")
 local netOk,net=pcall(require,"BuldacityNetworkClient")
 local options={
  {"AE2 Network","AE2Network_Modern.lua"},{"Diesel Generator","DieselGenerator_Modern.lua"},
@@ -12,12 +13,18 @@ local options={
  {"Immersive Engineering","ImmersiveEngineering_Network_Modern.lua"},
  {"Immersive Integration","ImmersiveIntegration_Network_Modern.lua"},
  {"Immersive Railroading","ImmersiveRailroading_Network_Modern.lua"},
- {"IndustrialCraft 2","IndustrialCraft2_Network_Modern.lua"}}
+ {"IndustrialCraft 2","IndustrialCraft2_Network_Modern.lua"},
+ {"Galacticraft","Galacticraft_Modern.lua"},{"Galacticraft Network","GalacticraftNetwork_Modern.lua"},
+ {"ExtraPlanets","ExtraPlanets_Modern.lua"},{"ExtraPlanets Network","ExtraPlanetsNetwork_Modern.lua"},
+ {"Forestry","Forestry_Modern.lua"},{"Forestry Network","ForestryNetwork_Modern.lua"},
+ {"Gendustry","Gendustry_Modern.lua"},{"Gendustry Network","GendustryNetwork_Modern.lua"}}
 print("BULDACITY CONTROLLER LAUNCHER // NETWORK")
 for i,v in ipairs(options) do print(string.format("%2d  %s",i,v[1])) end
 io.write("Select controller: ")
 local n=tonumber(io.read())
 if not n or not options[n] then return end
-if netOk and net then pcall(net.start,"BULDACITY // "..options[n][1],"CLIENT",{screen="ACTIVE",controller=options[n][2]}) end
-local path=shell.resolve(options[n][2])
+local file=options[n][2]
+if not pcall(function() return shell.resolve(file) end) then return end
+local path=shell.resolve(file)
+if netOk and net then pcall(net.start,"BULDACITY // "..options[n][1],"CLIENT",{screen="ACTIVE",controller=file}) end
 dofile(path)
