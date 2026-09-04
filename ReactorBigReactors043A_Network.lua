@@ -5,10 +5,33 @@
 
 local component=require("component")
 local event=require("event")
+local filesystem=require("filesystem")
 local Network=require("Network")
 
 local CLIENT_NAME="Big Reactors // Control Center"
 local CONTROLLER="ReactorBigReactors043A_Touch_Responsive.lua"
+
+-- OpenOS installations commonly keep downloaded Lua programs in /home.
+-- The old version always used /<file>, which caused:
+-- "file not found:/ReactorBigReactors043A_Touch_Responsive.lua"
+-- when the bridge and controller were installed in /home.
+local function findController()
+  local candidates={
+    "/home/"..CONTROLLER,
+    "/"..CONTROLLER,
+    CONTROLLER
+  }
+  for i=1,#candidates do
+    if filesystem.exists(candidates[i]) then return candidates[i] end
+  end
+  return nil
+end
+
+local controllerPath=findController()
+if not controllerPath then
+  error("Big Reactors controller not found. Install "..CONTROLLER.." in /home or /")
+end
+
 local ok,mode=Network.startClient(CLIENT_NAME,{controller=CONTROLLER,mod="Big Reactors",version="0.4.3A",network=true})
 if not ok then
   error("BULDACITY Big Reactors network unavailable: "..tostring(mode))
@@ -46,8 +69,6 @@ local function sendTelemetry(target)
   Network.send(target,"REACTOR_TELEMETRY",reactorData())
 end
 
--- Direct Big Reactors network commands. The central desktop can use these
--- without needing to know anything about the local component address.
 event.listen("modem_message",function(_,receiver,sender,port,distance,p)
   if port~=Network.PORT or not Network.valid(p) then return end
   if p.kind=="REACTOR_REQUEST" then
@@ -71,10 +92,6 @@ event.listen("modem_message",function(_,receiver,sender,port,distance,p)
   end
 end)
 
--- Publish telemetry both as a dedicated packet and as HEARTBEAT data.
--- BuldacityOS_Tier3.lua already stores all heartbeat fields, so the central
--- desktop immediately gets a live reactor snapshot without changing the
--- normal HELLO/client discovery protocol.
 event.timer(2,function()
   local data=reactorData()
   Network.broadcast("REACTOR_TELEMETRY",data)
@@ -84,8 +101,8 @@ event.timer(2,function()
   })
 end,math.huge)
 
--- Keep the original Responsive UI unchanged.
-local loaded,err=pcall(dofile,"/"..CONTROLLER)
+-- Start the controller from the location where it was actually installed.
+local loaded,err=pcall(dofile,controllerPath)
 if not loaded then
-  error("Unable to start "..CONTROLLER..": "..tostring(err))
+  error("Unable to start "..CONTROLLER.." from "..controllerPath..": "..tostring(err))
 end
