@@ -2,6 +2,8 @@
 -- Shared BULDACITY/2 network service.
 -- OpenComputers 1.7.10 / port 4242.
 -- Automatically detects wired/wireless modems and Relay/Access Point paths.
+-- Every client also reports whether a wireless modem/card is physically available
+-- and whether its wireless signal is configured correctly.
 -- Relay/Access Point strength and repeater mode are configured automatically.
 -- The central server also performs automatic end-to-end PING/PONG diagnostics.
 
@@ -13,12 +15,34 @@ local M={
  PROTOCOL="BULDACITY/2",PORT=4242,TIMEOUT=12,SCREEN_INTERVAL=1.0,
  MAX_WIRELESS_STRENGTH=400,
  modem=nil,wireless=false,wirelessStrength=0,
+ wirelessAvailable=false,wirelessReady=false,wirelessComponent=nil,
  relayPath=true,relayCount=0,accessPointCount=0,relayWirelessCount=0,
  relayDetected=false,relayPathType="NONE",lastPacketDistance=0,
  server=nil,lastServer=0,serverListening=false,serverCallback=nil,
  clientListening=false,heartbeatTimer=nil,
  diagnostics={},diagnosticTimer=nil
 }
+
+local function wirelessComponentCheck()
+ local found=nil
+ local count=0
+ for address in component.list("modem",true) do
+  local m=component.proxy(address)
+  if m and (type(m.setStrength)=="function" or type(m.getStrength)=="function") then
+   count=count+1
+   if not found then found=m end
+  end
+ end
+ M.wirelessAvailable=count>0
+ M.wirelessComponent=found and found.address or nil
+ M.wirelessReady=false
+ if found then
+  local strength=0
+  pcall(function() strength=found.getStrength() or 0 end)
+  M.wirelessReady=tonumber(strength) and tonumber(strength)>0 or false
+ end
+ return M.wirelessAvailable,M.wirelessReady,count,M.wirelessComponent
+end
 
 local function findModem()
  local wired=nil;local wireless=nil
@@ -74,20 +98,24 @@ local function configureRepeaters()
 end
 
 local function configureWireless(m)
- if not M.wireless then M.wirelessStrength=0;return end
+ wirelessComponentCheck()
+ if not M.wireless then M.wirelessStrength=0;M.wirelessReady=false;return end
  local ok=pcall(function() m.setStrength(M.MAX_WIRELESS_STRENGTH) end)
  if not ok then pcall(function() m.setStrength(16) end) end
  local strength=0
  pcall(function() strength=m.getStrength() or 0 end)
  M.wirelessStrength=tonumber(strength) or 0
+ M.wirelessReady=M.wirelessStrength>0
+ M.wirelessAvailable=true
+ M.wirelessComponent=m.address
 end
 
 local function initNetwork(port)
- local m=findModem();if not m then return false,"NO_MODEM" end
+ local m=findModem();if not m then wirelessComponentCheck();return false,"NO_MODEM" end
  M.PORT=port or M.PORT
  local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
- configureWireless(m);configureRepeaters()
+ configureWireless(m);configureRepeaters();wirelessComponentCheck()
  if M.wireless then return true,"WIRELESS:"..tostring(M.wirelessStrength)..":RELAY:"..tostring(M.relayPathType) end
  return true,"WIRED:RELAY:"..tostring(M.relayPathType)
 end
@@ -102,11 +130,26 @@ function M.packet(kind,data)
 end
 function M.valid(p) return type(p)=="table" and p.protocol==M.PROTOCOL and type(p.kind)=="string" end
 
+function M.componentCheck()
+ wirelessComponentCheck()
+ local modemCount=0
+ for _ in component.list("modem",true) do modemCount=modemCount+1 end
+ local relayCount=0
+ for _ in component.list("relay",true) do relayCount=relayCount+1 end
+ local apCount=0
+ for _ in component.list("access_point",true) do apCount=apCount+1 end
+ return {modemCount=modemCount,wirelessAvailable=M.wirelessAvailable,
+  wirelessReady=M.wirelessReady,wirelessComponent=M.wirelessComponent,
+  wirelessStrength=M.wirelessStrength,relayCount=relayCount,
+  accessPointCount=apCount,relayWirelessCount=M.relayWirelessCount,
+  wireless=M.wireless}
+end
+
 function M.send(address,kind,data)
  local m=findModem();if not m then return false,"NO_MODEM" end
  local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
- configureWireless(m);configureRepeaters()
+ configureWireless(m);configureRepeaters();wirelessComponentCheck()
  local sent,sErr=pcall(function() return m.send(address,M.PORT,M.packet(kind,data)) end)
  if not sent then return false,sErr end
  return true
@@ -115,7 +158,7 @@ function M.broadcast(kind,data)
  local m=findModem();if not m then return false,"NO_MODEM" end
  local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
- configureWireless(m);configureRepeaters()
+ configureWireless(m);configureRepeaters();wirelessComponentCheck()
  local sent,sErr=pcall(function() return m.broadcast(M.PORT,M.packet(kind,data)) end)
  if not sent then return false,sErr end
  return true
@@ -129,18 +172,19 @@ function M.setWirelessStrength(strength)
  local ok,err=pcall(function() m.setStrength(n) end)
  if not ok then return false,tostring(err) end
  local actual=0;pcall(function() actual=m.getStrength() or 0 end)
- M.wirelessStrength=tonumber(actual) or 0
+ M.wirelessStrength=tonumber(actual) or 0;M.wirelessReady=M.wirelessStrength>0;M.wirelessAvailable=true
  return true,M.wirelessStrength
 end
 function M.getWirelessStrength()
- local m=findModem();if not m or type(m.getStrength)~="function" then return 0 end
+ local m=findModem();wirelessComponentCheck();if not m or type(m.getStrength)~="function" then M.wirelessReady=false;return 0 end
  local v=0;pcall(function() v=m.getStrength() or 0 end)
- M.wirelessStrength=tonumber(v) or 0;return M.wirelessStrength
+ M.wirelessStrength=tonumber(v) or 0;M.wirelessReady=M.wirelessStrength>0;M.wirelessAvailable=true;M.wirelessComponent=m.address;return M.wirelessStrength
 end
 
 function M.status()
- configureRepeaters()
- return {wireless=M.wireless,wirelessStrength=M:getWirelessStrength(),relayReady=M.relayPath,
+ configureRepeaters();wirelessComponentCheck()
+ return {wireless=M.wireless,wirelessAvailable=M.wirelessAvailable,wirelessReady=M.wirelessReady,
+  wirelessComponent=M.wirelessComponent,wirelessStrength=M:getWirelessStrength(),relayReady=M.relayPath,
   relayDetected=M.relayDetected,relayPathType=M.relayPathType,relayCount=M.relayCount,
   accessPointCount=M.accessPointCount,relayWirelessCount=M.relayWirelessCount,
   lastPacketDistance=M.lastPacketDistance or 0,port=M.PORT,protocol=M.PROTOCOL,
@@ -157,10 +201,12 @@ function M.getDiagnostics()
 end
 
 local function clientPongData()
+ wirelessComponentCheck()
  return {name=M.name or "BULDACITY CONTROLLER",role="CLIENT",app=M.name or "BULDACITY CONTROLLER",
   relay=true,relayDetected=M.relayDetected,relayPathType=M.relayPathType,
   relayCount=M.relayCount,accessPointCount=M.accessPointCount,relayWirelessCount=M.relayWirelessCount,
-  wireless=M.wireless,wirelessStrength=M.wirelessStrength}
+  wireless=M.wireless,wirelessAvailable=M.wirelessAvailable,wirelessReady=M.wirelessReady,
+  wirelessComponent=M.wirelessComponent,wirelessStrength=M.wirelessStrength}
 end
 
 function M.startClient(name,extra)
@@ -169,6 +215,8 @@ function M.startClient(name,extra)
  M.extra.name=M.name;M.extra.role="CLIENT";M.extra.app=M.name;M.extra.mode=mode;M.extra.network=M.extra.network~=false
  M.extra.relay=true;M.extra.relayDetected=M.relayDetected;M.extra.relayPathType=M.relayPathType
  M.extra.relayCount=M.relayCount;M.extra.accessPointCount=M.accessPointCount;M.extra.relayWirelessCount=M.relayWirelessCount
+ M.extra.wireless=M.wireless;M.extra.wirelessAvailable=M.wirelessAvailable;M.extra.wirelessReady=M.wirelessReady
+ M.extra.wirelessComponent=M.wirelessComponent;M.extra.wirelessStrength=M.wirelessStrength
  M.broadcast("HELLO",M.extra)
  if not M.clientListening then
   M.clientListening=true
@@ -188,10 +236,11 @@ function M.startClient(name,extra)
  end
  if not M.heartbeatTimer then
   M.heartbeatTimer=event.timer(3,function()
-   findModem();configureWireless(M.modem);configureRepeaters()
+   findModem();configureWireless(M.modem);configureRepeaters();wirelessComponentCheck()
    M.broadcast("HEARTBEAT",{name=M.name,role="CLIENT",app=M.name,uptime=computer.uptime(),
-    wireless=M.wireless,wirelessStrength=M.wirelessStrength,relay=true,relayReady=M.relayPath,
-    relayDetected=M.relayDetected,relayPathType=M.relayPathType,relayCount=M.relayCount,
+    wireless=M.wireless,wirelessAvailable=M.wirelessAvailable,wirelessReady=M.wirelessReady,
+    wirelessComponent=M.wirelessComponent,wirelessStrength=M.wirelessStrength,
+    relay=true,relayReady=M.relayPath,relayDetected=M.relayDetected,relayPathType=M.relayPathType,relayCount=M.relayCount,
     accessPointCount=M.accessPointCount,relayWirelessCount=M.relayWirelessCount,
     lastDistance=M.lastDistance or 0,lastWirelessReceived=M.lastWirelessReceived==true})
   end,math.huge)
@@ -213,8 +262,8 @@ end
 
 -- Server side: every discovered client is automatically pinged. The result
 -- is stored in M.diagnostics and is also forwarded to the central UI through
--- the normal PONG callback. Thus the main PC tests every client without a
--- separate diagnostic program.
+-- the normal PONG callback. Wireless component presence/readiness is recorded
+-- for every client, so missing wireless cards are visible in the central UI.
 function M.startServer(onPacket)
  local ok,mode=initNetwork(M.PORT);if not ok then return false,mode end
  M.server=true;M.serverCallback=onPacket or M.serverCallback
@@ -229,14 +278,24 @@ function M.startServer(onPacket)
     local d=M.diagnostics[sender]
     for k,v in pairs(data) do d[k]=v end
     d.address=sender;d.last=computer.uptime();d.distance=tonumber(distance) or 0
-    d.wireless=d.distance>0;d.relayDetected=data.relayDetected;d.relayPathType=data.relayPathType
+    d.wireless=d.distance>0 or data.wireless==true
+    d.wirelessAvailable=data.wirelessAvailable==true
+    d.wirelessReady=data.wirelessReady==true
+    d.wirelessComponent=data.wirelessComponent
+    d.wirelessStrength=tonumber(data.wirelessStrength) or 0
+    d.relayDetected=data.relayDetected;d.relayPathType=data.relayPathType
     d.result="TESTING";d.pingSent=computer.uptime()
     M.send(sender,"PING",{from="BULDACITY SERVER",diagnostic=true,id=tostring(d.pingSent)})
    elseif p.kind=="PONG" then
     local d=M.diagnostics[sender] or {address=sender};M.diagnostics[sender]=d
     for k,v in pairs(data) do d[k]=v end
     d.address=sender;d.last=computer.uptime();d.lastPong=d.last
-    d.distance=tonumber(distance) or 0;d.wireless=d.distance>0;d.result="PASS"
+    d.distance=tonumber(distance) or 0;d.wireless=d.distance>0 or data.wireless==true
+    d.wirelessAvailable=data.wirelessAvailable==true
+    d.wirelessReady=data.wirelessReady==true
+    d.wirelessComponent=data.wirelessComponent
+    d.wirelessStrength=tonumber(data.wirelessStrength) or d.wirelessStrength or 0
+    d.result="PASS"
     if d.pingSent then d.latency=(d.last-d.pingSent)*1000 end
    end
    if M.serverCallback then M.serverCallback(sender,p,distance) end
