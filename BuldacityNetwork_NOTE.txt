@@ -1,0 +1,1 @@
+Modern controller entry points are network-enabled wrappers. Their original implementations are retained as *_Core.lua. Use the original filename normally; it starts the shared Buldacity client and then launches the original dashboard.
