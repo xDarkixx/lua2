@@ -1,8 +1,7 @@
 -- Network.lua
 -- Shared BULDACITY/2 network service.
 -- OpenComputers 1.7.10 / port 4242.
--- This is the only network helper needed on ordinary controller PCs.
--- Compatible with BuldacityOS_Tier3.lua as the central Tier-3 server.
+-- Compatible with Wireless Network Card (Tier 2) and wired Network Cards.
 
 local component=require("component")
 local computer=require("computer")
@@ -10,7 +9,7 @@ local event=require("event")
 
 local M={
  PROTOCOL="BULDACITY/2",PORT=4242,TIMEOUT=12,SCREEN_INTERVAL=1.0,
- modem=nil,wireless=false,server=nil,lastServer=0,
+ modem=nil,wireless=false,wirelessStrength=0,server=nil,lastServer=0,
  serverListening=false,serverCallback=nil,clientListening=false,heartbeatTimer=nil
 }
 
@@ -26,12 +25,30 @@ local function findModem()
  end
 end
 
+local function configureWireless(m)
+ if not M.wireless then return end
+ -- Wireless Network Cards only transmit wirelessly when a signal strength is set.
+ -- Tier 2 supports the same modem API as a normal network card, plus setStrength.
+ -- Use the maximum normal OC range; older/configured builds clamp or reject it safely.
+ local ok=pcall(function() m.setStrength(400) end)
+ if not ok then
+  pcall(function() m.setStrength(16) end)
+ end
+ local strength=0
+ pcall(function() strength=m.getStrength() or 0 end)
+ M.wirelessStrength=tonumber(strength) or 0
+end
+
 function M.init(port)
  local m=findModem(); if not m then return false,"NO_MODEM" end
  M.PORT=port or M.PORT
  local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
- return true,M.wireless and "WIRELESS" or "WIRED"
+ configureWireless(m)
+ if M.wireless then
+  return true,"WIRELESS:"..tostring(M.wirelessStrength)
+ end
+ return true,"WIRED"
 end
 
 function M.address()
@@ -47,6 +64,7 @@ function M.send(address,kind,data)
  local m=findModem();if not m then return false,"NO_MODEM" end
  local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
+ configureWireless(m)
  local sent,sErr=pcall(function() return m.send(address,M.PORT,M.packet(kind,data)) end)
  if not sent then return false,sErr end
  return true
@@ -56,6 +74,7 @@ function M.broadcast(kind,data)
  local m=findModem();if not m then return false,"NO_MODEM" end
  local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
+ configureWireless(m)
  local sent,sErr=pcall(function() return m.broadcast(M.PORT,M.packet(kind,data)) end)
  if not sent then return false,sErr end
  return true
@@ -97,7 +116,7 @@ function M.startClient(name,extra)
 
  if not M.heartbeatTimer then
   M.heartbeatTimer=event.timer(3,function()
-   M.broadcast("HEARTBEAT",{name=M.name,role="CLIENT",app=M.name,uptime=computer.uptime()})
+   M.broadcast("HEARTBEAT",{name=M.name,role="CLIENT",app=M.name,uptime=computer.uptime(),wireless=M.wireless,wirelessStrength=M.wirelessStrength})
   end,math.huge)
  end
  return true,mode
@@ -122,7 +141,6 @@ end
 function M.startServer(onPacket)
  local ok,mode=M.init(M.PORT);if not ok then return false,mode end
  -- BuldacityOS_Tier3.lua initializes the server once before installing its callback.
- -- Keep the listener singleton so repeated startServer calls do not create duplicate handlers.
  M.serverCallback=onPacket or M.serverCallback
  if not M.serverListening then
   M.serverListening=true
