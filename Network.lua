@@ -2,12 +2,17 @@
 -- Shared BULDACITY/2 network service.
 -- OpenComputers 1.7.10 / port 4242.
 -- This is the only network helper needed on ordinary controller PCs.
+-- Compatible with BuldacityOS_Tier3.lua as the central Tier-3 server.
 
 local component=require("component")
 local computer=require("computer")
 local event=require("event")
 
-local M={PROTOCOL="BULDACITY/2",PORT=4242,TIMEOUT=12,SCREEN_INTERVAL=1.0,modem=nil,wireless=false,server=nil,lastServer=0}
+local M={
+ PROTOCOL="BULDACITY/2",PORT=4242,TIMEOUT=12,SCREEN_INTERVAL=1.0,
+ modem=nil,wireless=false,server=nil,lastServer=0,
+ serverListening=false,serverCallback=nil,clientListening=false,heartbeatTimer=nil
+}
 
 local function findModem()
  if M.modem and type(M.modem.open)=="function" then return M.modem end
@@ -24,21 +29,41 @@ end
 function M.init(port)
  local m=findModem(); if not m then return false,"NO_MODEM" end
  M.PORT=port or M.PORT
- m.open(M.PORT)
+ local ok,err=pcall(m.open,M.PORT)
+ if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
  return true,M.wireless and "WIRELESS" or "WIRED"
 end
 
-function M.address() local ok,a=pcall(computer.address);return ok and a or "unknown" end
-function M.packet(kind,data) return {protocol=M.PROTOCOL,kind=kind,sender=M.address(),time=computer.uptime(),data=data or {}} end
+function M.address()
+ local ok,a=pcall(computer.address)
+ return ok and a or "unknown"
+end
+
+function M.packet(kind,data)
+ return {protocol=M.PROTOCOL,kind=kind,sender=M.address(),time=computer.uptime(),data=data or {}}
+end
+
 function M.send(address,kind,data)
  local m=findModem();if not m then return false,"NO_MODEM" end
- m.open(M.PORT);return m.send(address,M.PORT,M.packet(kind,data))
+ local ok,err=pcall(m.open,m,M.PORT)
+ if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
+ local sent,sErr=pcall(m.send,m,address,M.PORT,M.packet(kind,data))
+ if not sent then return false,sErr end
+ return true
 end
+
 function M.broadcast(kind,data)
  local m=findModem();if not m then return false,"NO_MODEM" end
- m.open(M.PORT);return m.broadcast(M.PORT,M.packet(kind,data))
+ local ok,err=pcall(m.open,m,M.PORT)
+ if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
+ local sent,sErr=pcall(m.broadcast,m,M.PORT,M.packet(kind,data))
+ if not sent then return false,sErr end
+ return true
 end
-function M.valid(p) return type(p)=="table" and p.protocol==M.PROTOCOL and type(p.kind)=="string" end
+
+function M.valid(p)
+ return type(p)=="table" and p.protocol==M.PROTOCOL and type(p.kind)=="string"
+end
 
 function M.startClient(name,extra)
  local ok,mode=M.init(M.PORT);if not ok then return false,mode end
@@ -46,19 +71,35 @@ function M.startClient(name,extra)
  M.extra=extra or {}
  M.extra.name=M.name;M.extra.role="CLIENT";M.extra.app=M.name;M.extra.mode=mode
  M.broadcast("HELLO",M.extra)
- event.listen("modem_message",function(_,receiver,sender,port,distance,p)
-  if port~=M.PORT or not M.valid(p) then return end
-  if p.kind=="SERVER_HELLO" or p.kind=="PONG" then M.server=sender;M.lastServer=computer.uptime()
-  elseif p.kind=="PING" then M.send(sender,"PONG",{name=M.name,role="CLIENT",app=M.name})
-  elseif p.kind=="INPUT" and type(p.data)=="table" then
-   local d=p.data
-   if d.event=="key_down" or d.event=="key_up" then pcall(computer.pushSignal,d.event,sender,d.char or 0,d.code or 0)
-   elseif d.event=="touch" then pcall(computer.pushSignal,"touch",sender,d.x or 1,d.y or 1,d.button or 0)
-   elseif d.event=="scroll" then pcall(computer.pushSignal,"scroll",sender,d.x or 0,d.y or 0,d.button or 0) end
-  elseif p.kind=="SCREEN_REQUEST" then M.sendScreen(sender)
-  end
- end)
- event.timer(3,function() M.broadcast("HEARTBEAT",{name=M.name,role="CLIENT",app=M.name,uptime=computer.uptime()}) end,math.huge)
+
+ if not M.clientListening then
+  M.clientListening=true
+  event.listen("modem_message",function(_,receiver,sender,port,distance,p)
+   if port~=M.PORT or not M.valid(p) then return end
+   if p.kind=="SERVER_HELLO" or p.kind=="PONG" then
+    M.server=sender;M.lastServer=computer.uptime()
+   elseif p.kind=="PING" then
+    M.send(sender,"PONG",{name=M.name,role="CLIENT",app=M.name})
+   elseif p.kind=="INPUT" and type(p.data)=="table" then
+    local d=p.data
+    if d.event=="key_down" or d.event=="key_up" then
+     pcall(computer.pushSignal,d.event,sender,d.char or 0,d.code or 0)
+    elseif d.event=="touch" then
+     pcall(computer.pushSignal,"touch",sender,d.x or 1,d.y or 1,d.button or 0)
+    elseif d.event=="scroll" then
+     pcall(computer.pushSignal,"scroll",sender,d.x or 0,d.y or 0,d.button or 0)
+    end
+   elseif p.kind=="SCREEN_REQUEST" then
+    M.sendScreen(sender)
+   end
+  end)
+ end
+
+ if not M.heartbeatTimer then
+  M.heartbeatTimer=event.timer(3,function()
+   M.broadcast("HEARTBEAT",{name=M.name,role="CLIENT",app=M.name,uptime=computer.uptime()})
+  end,math.huge)
+ end
  return true,mode
 end
 
@@ -68,7 +109,10 @@ function M.sendScreen(address)
  M.send(address,"SCREEN_BEGIN",{width=w,height=h})
  for y=1,h do
   local cells={}
-  for x=1,w do local ch,fg,bg=gpu.get(x,y);cells[x]={ch or " ",fg or 0xFFFFFF,bg or 0} end
+  for x=1,w do
+   local ch,fg,bg=gpu.get(x,y)
+   cells[x]={ch or " ",fg or 0xFFFFFF,bg or 0}
+  end
   M.send(address,"SCREEN_ROW",{y=y,cells=cells})
  end
  M.send(address,"SCREEN_END",{width=w,height=h})
@@ -77,10 +121,16 @@ end
 
 function M.startServer(onPacket)
  local ok,mode=M.init(M.PORT);if not ok then return false,mode end
- event.listen("modem_message",function(_,receiver,sender,port,distance,p)
-  if port~=M.PORT or not M.valid(p) then return end
-  if onPacket then onPacket(sender,p,distance) end
- end)
+ -- BuldacityOS_Tier3.lua initializes the server once before installing its callback.
+ -- Keep the listener singleton so repeated startServer calls do not create duplicate handlers.
+ M.serverCallback=onPacket or M.serverCallback
+ if not M.serverListening then
+  M.serverListening=true
+  event.listen("modem_message",function(_,receiver,sender,port,distance,p)
+   if port~=M.PORT or not M.valid(p) then return end
+   if M.serverCallback then M.serverCallback(sender,p,distance) end
+  end)
+ end
  return true,mode
 end
 
