@@ -15,13 +15,13 @@ Diese Übersicht erklärt die OpenComputers-Komponenten für die Lua-Programme i
 
 ## LogisticsPipes 0.9.3.132
 
-Ziel: `logisticspipes-0.9.3.132.jar`, Minecraft 1.7.10. Die Version ist als 1.7.10-Build dokumentiert. citeturn0search0
+Ziel: `logisticspipes-0.9.3.132.jar`, Minecraft 1.7.10.
 
 ### Wichtig zur OpenComputers-Unterstützung
 
-LogisticsPipes enthält eine eigene OpenComputers-Proxy-Schicht. Der Quellcode zeigt `OpenComputersProxy` und die OC-Wrapper-Klassen; diese können LP-Objekte und deren tatsächlich registrierte Befehle dynamisch bereitstellen. fileciteturn188file0L1-L14 fileciteturn190file0L1-L2
+LogisticsPipes enthält eine eigene OpenComputers-Proxy-Schicht. Der Quellcode zeigt `OpenComputersProxy` und OC-Wrapper-Klassen, die LP-Objekte und deren tatsächlich registrierte Befehle dynamisch bereitstellen.
 
-Bei älteren 1.7.10-Kombinationen gab es allerdings Fälle, in denen Logistics Pipes von OpenComputers nur als `bc_pipe` erkannt wurde. Deshalb darf ein Controller nicht einfach eine erfundene feste LP-Komponentenadresse annehmen. citeturn2search0
+Bei älteren 1.7.10-Kombinationen gab es Fälle, in denen Logistics Pipes von OpenComputers nur als `bc_pipe` erkannt wurde. Deshalb nimmt der Controller keine erfundene feste LP-Komponentenadresse an.
 
 ### Buldacity Controller
 
@@ -45,7 +45,7 @@ Die Oberfläche sucht die zur Laufzeit sichtbaren OpenComputers-Komponenten und 
 - Refresh
 - Tier-2-Anbindung an den Buldacity-Server
 
-Die LP-OC-Wrapper selbst besitzen unter anderem `help()` und `helpCommand()` zur Anzeige der tatsächlich verfügbaren Befehle. fileciteturn190file0L1-L2
+Die LP-OC-Wrapper besitzen `help()` und `helpCommand()` zur Anzeige der tatsächlich verfügbaren Befehle.
 
 ### Anschluss
 
@@ -74,7 +74,7 @@ Tier-3 Server
      └──────── weitere Tier-2 Controller
 ```
 
-**Hinweis:** Die normale LogisticsPipes-Rohrlogik selbst bleibt Sache von LogisticsPipes/BuildCraft. Der Lua-Controller kann nur das steuern, was die installierte LP-Version tatsächlich über OpenComputers exponiert.
+Die normale LogisticsPipes-Rohrlogik bleibt Sache von LogisticsPipes/BuildCraft. Der Lua-Controller steuert nur das, was die installierte LP-Version tatsächlich über OpenComputers exponiert.
 
 ## Andere Systeme
 
