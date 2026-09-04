@@ -1,4 +1,6 @@
--- Buldacity ExtraPlanets Network Controller
+-- Network controller for ExtraPlanets
+local ok,net=pcall(require,"Network")
+if ok and net and net.startClient then pcall(net.startClient,"ExtraPlanets",{controller="ExtraPlanets_Modern.lua"}) end
 local component=require("component")
 local event=require("event")
 local term=require("term")
