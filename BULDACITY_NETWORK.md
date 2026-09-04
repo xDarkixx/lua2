@@ -1,269 +1,252 @@
 # Buldacity Netzwerk – Tier 2 / Tier 3
 
-## Ziel
+## Aktueller Stand
 
-Buldacity verwendet ein gemeinsames OpenComputers-Netzwerk. Ein Tier-3-Rechner ist die zentrale Leitstelle und stellt den PC-artigen Buldacity-Server-Desktop bereit. Tier-2-Rechner laufen als Controller für die vorhandenen Maschinen-/Mod-Systeme.
+Buldacity verwendet ein gemeinsames OpenComputers-Netzwerk. Ein Tier-3-Rechner ist die zentrale Leitstelle und stellt den **BuldacityOS-Tier-3-Desktop** bereit. Tier-2/3-Rechner laufen als Controller für die Maschinen- und Mod-Systeme.
 
 Die Netzwerkbasis nutzt OpenComputers-Modem-Nachrichten und `modem_message`-Signale.
 
-## Was wird benötigt?
+**Aktueller Standard:** `BULDACITY/2`, Modem-Port `4242`.
 
-### Minecraft / Mods
+## Server-PC
 
-- Minecraft **1.7.10**
-- OpenComputers passend zu Minecraft 1.7.10
-- Die jeweilige Mod für den gewünschten Controller
-- Für die konkrete Mod müssen die im jeweiligen Script genannten Komponenten vorhanden sein
+Benötigt:
 
-### Tier 3 Server-PC
-
-Pflicht:
-
-- OpenComputers **Tier-3 Computer**
-- Tier-3 CPU / RAM / Festplatte nach OpenComputers-Bauplan
-- Screen
+- OpenComputers Tier-3 Computer
+- CPU / RAM / Festplatte passend zum Computer
 - GPU
-- Keyboard oder Touchscreen
-- **Network Card oder Wireless Network Card**
+- Screen
+- Keyboard
+- Wireless Network Card oder kompatible Network Card
 - OpenOS
-- `BuldacityServer_Tier3.lua`
+- `BuldacityWireless.lua`
+- `BuldacityOS_Tier3.lua`
 
-Empfohlen:
+Der alte `BuldacityDesktop_Tier3.lua` wird nicht mehr verwendet.
 
-- Internet Card ist für den lokalen Buldacity-Betrieb nicht erforderlich
-- Chunkloader, wenn der Server auch bei großer Entfernung dauerhaft laufen soll
+## Controller-PC
 
-### Tier 2 Controller-PC
+Pro Controller:
 
-Pro Controller wird benötigt:
-
-- OpenComputers **Tier-2 Computer**
+- OpenComputers Tier-2 oder Tier-3 Computer
 - CPU / RAM / Festplatte passend zum Controller
-- Screen
-- GPU
-- Keyboard und/oder Touchscreen nach Bedarf
-- **Network Card oder Wireless Network Card**
+- GPU + Screen für eine lokale Oberfläche
+- Keyboard nach Bedarf
+- Wireless Network Card oder Network Card
 - OpenOS
+- `BuldacityWireless.lua`
 - `BuldacityNetworkClient.lua`
 - `BuldacityControllerLauncher.lua`
-- gewünschte Controller-Lua-Datei
+- benötigtes Controller-Skript
 
-## Netzwerk-Hardware
-
-Es gibt zwei Varianten:
-
-### Variante A – Wireless
-
-Jeder Tier-2-PC und der Tier-3-Server bekommen eine Wireless Network Card. Die Rechner müssen sich gegenseitig im Funkbereich erreichen können.
+## Netzwerk
 
 ```text
-                 ┌─────────────────────────┐
-                 │   BULDACITY TIER 3       │
-                 │   Server / Desktop       │
-                 │   Wireless Network Card  │
-                 └────────────┬────────────┘
-                              ))
-                 BULDACITY/1 : 4242
-                    )))       )))       )))
-                    │         │         │
-             ┌──────┴───┐ ┌───┴─────┐ ┌─┴────────┐
-             │ Tier 2   │ │ Tier 2  │ │ Tier 2   │
-             │ AE2      │ │ Reactor │ │ SGCraft  │
-             └──────────┘ └─────────┘ └──────────┘
+                     TIER-3 BULDACITY OS
+                              │
+                           WIRELESS
+                              │
+          ┌───────────────────┼───────────────────┐
+          ▼                   ▼                   ▼
+      CONTROLLER          CONTROLLER          CONTROLLER
+        REACTOR             DIESEL                AE2
+          │                   │                   │
+       OC-Kabel            OC-Kabel            OC-Kabel
+          │                   │                   │
+       Maschine            Maschine              AE2
 ```
 
-### Variante B – Kabel / Wired
+Die Funkverbindung transportiert BULDACITY-Pakete und Remote-Oberflächen. Die lokale Maschinenverbindung bleibt über OC-Komponenten/Kabel getrennt.
 
-Wenn Wireless nicht benötigt wird, kann das OpenComputers-Netz auch über kompatible Wired-Network-Komponenten aufgebaut werden. Wichtig ist, dass die Modem-Komponenten die jeweiligen Rechner erreichen können.
+## BuldacityOS Desktop
 
-## Software im Repository
+Der zentrale Desktop enthält:
 
-### Server
-
-`BuldacityServer_Tier3.lua`
-
-Der Tier-3-Rechner startet damit den Buldacity-Server-Desktop. Der Desktop besitzt:
-
-- Buldacity-OS-Startleiste
-- Desktop-Ansicht
-- Systemstatus
-- Netzwerkstatus
-- Device Manager
+- HOME
+- NETWORK
+- DEVICES
+- CONTROLLER APPS
+- REMOTE INTERFACE
+- TERMINAL
+- SYSTEM MONITOR
 - Online-/Offline-Erkennung
-- Remote-Control-Ansicht
-- Uhr
-- Touch-Bedienung
-- Tastaturbedienung
-- Server-Ankündigung / Rescan
+- Ping/Rescan
+- Touch- und Tastaturbedienung
 
-### Gemeinsamer Client-Dienst
+Unter `DEVICES` werden die aktiven Controller angezeigt. Mit `REMOTE` kann die Oberfläche des ausgewählten Controllers live auf dem Tier-3-Screen dargestellt werden.
 
-`BuldacityNetworkClient.lua`
+## Live-Oberflächen
 
-Der Dienst erledigt:
+Der Controller kann seine GPU-Zeichenfläche übertragen.
 
-- Anmeldung am Buldacity-Netz
-- `HELLO`
-- regelmäßige `HEARTBEAT`-Pakete
+```text
+Controller GPU
+     │
+     │ SCREEN_BEGIN
+     │ SCREEN_ROW
+     │ SCREEN_END
+     ▼
+BULDACITY/2 : 4242
+     │
+     ▼
+Tier-3 REMOTE INTERFACE
+```
+
+Die Darstellung wird aus Zeichen- und Farb-Zellen aufgebaut. Es handelt sich nicht um einen Pixel-Video-Stream.
+
+Remote-Eingaben:
+
+- `key_down`
+- `key_up`
+- `touch`
+- `scroll`
+
+Diese werden über `INPUT` an den ausgewählten Controller übertragen.
+
+## Netzwerkdienst
+
+`BuldacityNetworkClient.lua` übernimmt:
+
+- HELLO
+- HEARTBEAT
 - Server-Erkennung
-- `PING` / `PONG`
-- Empfang von `INPUT`
-- Weitergabe von Remote-Tastatur-, Touch- und Scroll-Signalen an den Tier-2-Computer
+- PING/PONG
+- INPUT
+- SCREEN_REQUEST
+- SCREEN_BEGIN
+- SCREEN_ROW
+- SCREEN_END
 
-### Launcher
+`BuldacityWireless.lua` ist die gemeinsame Transport-Schicht und verwendet die OpenComputers-Modem-API.
 
-`BuldacityControllerLauncher.lua`
+## Controller-Apps
 
-Der Launcher startet den Netzwerkdienst und danach den gewünschten Controller. Dadurch muss nicht jeder Controller separat umgebaut werden, um am gemeinsamen Netzwerk teilzunehmen.
+Der Desktop kennt unter anderem:
 
-## Unterstützte Controller
-
-Der Launcher enthält aktuell Einträge für:
-
-1. AE2 Network
-2. Diesel Generator / Immersive Engineering
+1. AE2
+2. Diesel / Immersive Engineering
 3. Mekanism
 4. Thermal
 5. ProjectE
 6. RFTools
 7. SGCraft
-8. Big Reactors / Reactor
+8. Reactor / Big Reactors
 9. RotaryCraft
 10. Thermal Expansion
+11. PneumaticCraft
+12. LogisticsPipes
+13. Immersive Engineering
+14. Immersive Integration
+15. Immersive Railroading
+16. IndustrialCraft 2
+17. Galacticraft
+18. ExtraPlanets
+19. Forestry
+20. Gendustry
 
-Die jeweiligen Mod-Versionen und Zusatzanforderungen stehen in den einzelnen Controller-Dateien bzw. in der Komponenten-Dokumentation.
-
-## Startreihenfolge
+## Start
 
 ### Tier 3
 
 ```text
-1. OpenOS starten
-2. BuldacityServer_Tier3.lua starten
-3. Server-Desktop erscheint
-4. Server sendet regelmäßig SERVER-Ankündigungen
+OpenOS
+  ↓
+BuldacityOS_Tier3.lua
+  ↓
+HOME
+  ↓
+DEVICES
+  ↓
+Controller auswählen
+  ↓
+REMOTE
 ```
 
-### Tier 2
+### Controller
 
 ```text
-1. OpenOS starten
-2. BuldacityControllerLauncher.lua starten
-3. Controller auswählen
-4. Netzwerkdienst meldet den Controller am Tier 3 an
-5. Controller startet
+OpenOS
+  ↓
+BuldacityControllerLauncher.lua
+  ↓
+Controller auswählen
+  ↓
+BuldacityNetworkClient
+  ↓
+HELLO / HEARTBEAT
 ```
 
-## Verbindung
-
-Alle Buldacity-Netzpakete verwenden:
-
-- Protokoll: `BULDACITY/1`
-- Modem-Port: **4242**
-
-Beispiel:
+## Bedienung
 
 ```text
-Tier 2 Controller
-       │
-       │ HELLO
-       ▼
-Tier 3 Server
-       │
-       │ SERVER
-       ▼
-Tier 2 Controller
-       │
-       │ HEARTBEAT alle ~3 s
-       ▼
-Tier 3 Server
+1 = HOME
+2 = NETWORK
+3 = DEVICES
+4 = CONTROLLER APPS
+5 = REMOTE
+6 = TERMINAL
+7 = SYSTEM
+Q = Desktop beenden
+R = Rescan / Remote Refresh
+Pfeil hoch/runter = Controller auswählen
+ENTER = Controller öffnen
 ```
-
-Der Server betrachtet einen Controller nach ungefähr 10 Sekunden ohne gültigen Heartbeat als offline.
-
-## Remote-Steuerung
-
-Im Tier-3-Desktop kann ein Gerät unter **DEVICES** ausgewählt und anschließend **REMOTE** geöffnet werden.
-
-Aktuell unterstützt die Remote-Verbindung:
-
-- Tier-3-Tastatur → Tier-2 `key_down`
-- Tier-3-Tastatur → Tier-2 `key_up`
-- Tier-3-Touch → Tier-2 `touch`
-- Tier-3-Scroll → Tier-2 `scroll`
-
-Der Tier-2-Client empfängt diese Signale und stellt sie dem lokalen OpenComputers-Eventsystem zur Verfügung.
-
-### Wichtig: Bildschirmübertragung
-
-Ein echter Pixel-Stream des Tier-2-GPU-Bildschirms ist **noch nicht implementiert**. Die aktuelle Remote-Seite ist deshalb eine echte Remote-Steuerung plus Status-/Metadatenansicht, aber kein vollständiges VNC/RDP-artiges Bild.
-
-Der Grund ist die OpenComputers-GPU-Schnittstelle: Das Script kann Zeichen auf den Bildschirm schreiben, bekommt aber nicht einfach einen vollständigen Pixel-/Text-Framebuffer zurück. Deshalb wird keine falsche „Bildschirmspiegelung“ vorgetäuscht.
-
-## Bedienung Tier 3
-
-- `1` = Desktop
-- `2` = Device Manager
-- `3` = Remote
-- `Pfeil hoch` = vorheriges Gerät
-- `Pfeil runter` = nächstes Gerät
-- `R` = Server-Ankündigung / Rescan
-- `Q` = Server beenden
-
-Im Remote-Modus werden Tastatur- und Touch-Eingaben an das ausgewählte Tier-2-Gerät weitergeleitet.
-
-## Sicherheit
-
-Das aktuelle Protokoll ist für ein Minecraft-LAN gedacht.
-
-Es besitzt derzeit:
-
-- keine Verschlüsselung
-- keine Benutzer-/Passwortauthentifizierung
-- keine kryptografische Geräte-ID-Prüfung
-
-Daher sollte Port **4242** nicht ungeschützt über das öffentliche Internet weitergeleitet werden.
 
 ## Fehlerbehebung
 
-### Tier 2 wird nicht angezeigt
+### Controller nicht sichtbar
 
-Prüfen:
+- Wireless/Network Card prüfen
+- Port `4242` prüfen
+- `BULDACITY/2` verwenden
+- Client starten
+- Tier-3 `R` drücken
 
-1. Network/Wireless Network Card eingebaut?
-2. Beide Rechner erreichen sich?
-3. Server läuft?
-4. Tier-2-Launcher läuft?
-5. Beide verwenden Port **4242**?
-6. Ist `BuldacityNetworkClient.lua` auf dem Tier-2-Rechner vorhanden?
-7. Ist OpenOS korrekt installiert?
+### Remote-Oberfläche leer
 
-### Controller läuft, aber Remote-Eingaben kommen nicht an
+- Controller braucht GPU + Screen
+- aktuelles `BuldacityNetworkClient.lua` installieren
+- REMOTE erneut öffnen
+- `SCREEN_REQUEST` prüfen
+- Funkreichweite prüfen
 
-- Controller über `BuldacityControllerLauncher.lua` starten
-- prüfen, dass `BuldacityNetworkClient.lua` geladen werden kann
-- prüfen, dass der Tier-2-Computer Netzwerkpakete empfängt
-- prüfen, dass im Tier 3 das richtige Gerät unter REMOTE ausgewählt ist
+### Eingaben funktionieren nicht
 
-## Zielaufbau
+- richtigen Controller auswählen
+- REMOTE öffnen
+- Client-Netzwerkdienst prüfen
+- `INPUT`-Empfang prüfen
+
+### Maschine funktioniert nicht
+
+Netzwerk und lokale Maschinenverbindung getrennt prüfen:
 
 ```text
-                     ┌──────────────────────────────┐
-                     │      BULDACITY TIER 3         │
-                     │  PC-artiger Server Desktop   │
-                     │  Device Manager / Remote     │
-                     │  Port 4242 / BULDACITY/1    │
-                     └──────────────┬───────────────┘
-                                    │
-             ┌──────────────────────┼─────────────────────┐
-             │                      │                     │
-        ┌────▼─────┐           ┌────▼─────┐         ┌────▼─────┐
-        │ Tier 2   │           │ Tier 2   │         │ Tier 2   │
-        │ AE2      │           │ Reactor  │         │ SGCraft  │
-        └────┬─────┘           └────┬─────┘         └────┬─────┘
-             │                      │                     │
-          ME-Netz               Big Reactor            Stargate
-
-             weitere Tier-2-Controller können parallel
-             über denselben Buldacity-Netzwerkdienst laufen.
+Funk OK + Maschine nicht OK
+        ↓
+OC-Kabel / Adapter / Controller prüfen
 ```
+
+## Sicherheit
+
+Das Netzwerk besitzt bewusst keine Whitelist. Es ist für eine private Minecraft-Umgebung gedacht.
+
+Aktuell gibt es keine Verschlüsselung oder Benutzer-/Passwortauthentifizierung. Port `4242` sollte deshalb nicht ungeschützt ins öffentliche Internet weitergeleitet werden.
+
+## Aktuelle Kernstruktur
+
+```text
+BuldacityOS_Tier3.lua
+        │
+        ├── BuldacityWireless.lua
+        │
+        ├── BuldacityNetworkClient.lua
+        │
+        ├── BuldacityControllerLauncher.lua
+        │
+        ├── BuldacityNetworkLauncher.lua
+        │
+        └── BuldacityNetworkStatus.lua
+```
+
+Diese Struktur verwendet eine zentrale Netzwerkbasis und vermeidet eine zweite konkurrierende Tier-3-Desktop-Implementierung.
