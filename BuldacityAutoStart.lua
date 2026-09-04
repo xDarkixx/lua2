@@ -12,7 +12,7 @@ local ROLE_FILE=HOME.."buldacity-role.cfg"
 local DEFAULT_ROLE="CLIENT"
 
 local CLIENTS={
- ["3DPrinter"]="3DPrinterNetwork_Modern.lua",["AE2"]="AE2NetworkEndpoint_Modern.lua",["DieselGenerator"]="DieselGeneratorNetwork_Modern.lua",["ExtraPlanets"]="ExtraPlanetsNetwork_Modern.lua",["Forestry"]="ForestryNetwork_Modern.lua",["Galacticraft"]="GalacticraftNetwork_Modern.lua",["Gendustry"]="GendustryNetwork_Modern.lua",["ImmersiveEngineering"]="ImmersiveEngineering_Network_Modern.lua",["ImmersiveIntegration"]="ImmersiveIntegration_Network_Modern.lua",["ImmersiveRailroading"]="ImmersiveRailroading_Network_Modern.lua",["IndustrialCraft2"]="IndustrialCraft2_Network_Modern.lua",["LogisticsPipes"]="LogisticsPipesNetwork_Modern.lua",["Mekanism"]="MekanismNetwork_Modern.lua",["PneumaticCraft"]="PneumaticCraftNetwork_Modern.lua",["ProjectE"]="ProjectENetwork_Modern.lua",["RFTools"]="RFToolsNetwork_Modern.lua",["RotaryCraft"]="RotaryCraftNetwork_Modern.lua",["SGCraft"]="SGCraftNetwork_Modern.lua",["ThermalExpansion"]="ThermalExpansionNetwork_Modern.lua",["BigReactors"]="ReactorBigReactors043A_Network.lua"
+ ["3DPrinter"]="3DPrinterNetwork_Modern.lua",["AE2"]="AE2NetworkEndpoint_Modern.lua",["DieselGenerator"]="DieselGeneratorNetwork_Modern.lua",["ExtraPlanets"]="ExtraPlanetsNetwork_Modern.lua",["Forestry"]="ForestryNetwork_Modern.lua",["Galacticraft"]="GalacticraftNetwork_Modern.lua",["Gendustry"]="GendustryNetwork_Modern.lua",["ImmersiveEngineering"]="ImmersiveEngineering_Network_Modern.lua",["ImmersiveIntegration"]="ImmersiveIntegration_Network_Modern.lua",["ImmersiveRailroading"]="ImmersiveRailroadingNetwork_Modern.lua",["IndustrialCraft2"]="IndustrialCraft2_Network_Modern.lua",["LogisticsPipes"]="LogisticsPipesNetwork_Modern.lua",["Mekanism"]="MekanismNetwork_Modern.lua",["PneumaticCraft"]="PneumaticCraftNetwork_Modern.lua",["ProjectE"]="ProjectENetwork_Modern.lua",["RFTools"]="RFToolsNetwork_Modern.lua",["RotaryCraft"]="RotaryCraftNetwork_Modern.lua",["SGCraft"]="SGCraftNetwork_Modern.lua",["ThermalExpansion"]="ThermalExpansionNetwork_Modern.lua",["BigReactors"]="ReactorBigReactors043A_Network.lua"
 }
 
 local function trim(s) return tostring(s or ""):gsub("^%s+",""):gsub("%s+$","") end
@@ -34,8 +34,7 @@ local function readConfig()
  return role,client
 end
 
--- Make /home the only BULDACITY program location and explicitly add it to
--- OpenOS package.path. This guarantees require("Network") finds /home/Network.lua.
+-- Force the shared BULDACITY module directory into OpenOS module lookup.
 pcall(function() shell.setWorkingDirectory("/home") end)
 package.path="/home/?.lua;/home/?/init.lua;"..(package.path or "")
 
