@@ -29,7 +29,7 @@ end
 function M.init(port)
  local m=findModem(); if not m then return false,"NO_MODEM" end
  M.PORT=port or M.PORT
- local ok,err=pcall(m.open,M.PORT)
+ local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
  return true,M.wireless and "WIRELESS" or "WIRED"
 end
@@ -45,18 +45,18 @@ end
 
 function M.send(address,kind,data)
  local m=findModem();if not m then return false,"NO_MODEM" end
- local ok,err=pcall(m.open,m,M.PORT)
+ local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
- local sent,sErr=pcall(m.send,m,address,M.PORT,M.packet(kind,data))
+ local sent,sErr=pcall(function() return m.send(address,M.PORT,M.packet(kind,data)) end)
  if not sent then return false,sErr end
  return true
 end
 
 function M.broadcast(kind,data)
  local m=findModem();if not m then return false,"NO_MODEM" end
- local ok,err=pcall(m.open,m,M.PORT)
+ local ok,err=pcall(function() m.open(M.PORT) end)
  if not ok then return false,"OPEN_PORT_FAILED:"..tostring(err) end
- local sent,sErr=pcall(m.broadcast,m,M.PORT,M.packet(kind,data))
+ local sent,sErr=pcall(function() return m.broadcast(M.PORT,M.packet(kind,data)) end)
  if not sent then return false,sErr end
  return true
 end
