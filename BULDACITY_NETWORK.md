@@ -2,123 +2,270 @@
 
 ## Ziel
 
-Buldacity verwendet ein gemeinsames OpenComputers-Funkprotokoll. Ein Tier-3-Rechner ist die zentrale Leitstelle. Tier-2-Rechner laufen als Controller für AE2, Reactor, Diesel Generator, RotaryCraft, Mekanism, Thermal, ProjectE, RFTools und SGCraft.
+Buldacity verwendet ein gemeinsames OpenComputers-Netzwerk. Ein Tier-3-Rechner ist die zentrale Leitstelle und stellt den PC-artigen Buldacity-Server-Desktop bereit. Tier-2-Rechner laufen als Controller für die vorhandenen Maschinen-/Mod-Systeme.
 
-## Hardware
+Die Netzwerkbasis nutzt OpenComputers-Modem-Nachrichten. OpenComputers stellt dafür Modem-Komponenten und `modem_message`-Signale bereit. citeturn0search0
 
-### Tier 3 Server
+## Was wird benötigt?
 
-- OpenComputers Tier-3 Computer
-- Bildschirm + GPU
+### Minecraft / Mods
+
+- Minecraft **1.7.10**
+- OpenComputers passend zu Minecraft 1.7.10
+- Die jeweilige Mod für den gewünschten Controller
+- Für die konkrete Mod müssen die im jeweiligen Script genannten Komponenten vorhanden sein
+
+### Tier 3 Server-PC
+
+Pflicht:
+
+- OpenComputers **Tier-3 Computer**
+- Tier-3 CPU / RAM / Festplatte nach OpenComputers-Bauplan
+- Screen
+- GPU
 - Keyboard oder Touchscreen
 - **Network Card oder Wireless Network Card**
+- OpenOS
 - `BuldacityServer_Tier3.lua`
 
-### Tier 2 Controller
+Empfohlen:
 
-- OpenComputers Tier-2 Computer
-- Bildschirm + GPU
-- Keyboard/Touch optional
+- Internet Card ist für den lokalen Buldacity-Betrieb nicht erforderlich
+- Chunkloader, wenn der Server auch bei großer Entfernung dauerhaft laufen soll
+
+### Tier 2 Controller-PC
+
+Pro Controller wird benötigt:
+
+- OpenComputers **Tier-2 Computer**
+- CPU / RAM / Festplatte passend zum Controller
+- Screen
+- GPU
+- Keyboard und/oder Touchscreen nach Bedarf
 - **Network Card oder Wireless Network Card**
-- Controller-Dateien aus diesem Repository
-- empfohlen: `BuldacityControllerLauncher.lua`
+- OpenOS
+- `BuldacityNetworkClient.lua`
+- `BuldacityControllerLauncher.lua`
+- gewünschte Controller-Lua-Datei
 
-## Netzwerkaufbau
+## Netzwerk-Hardware
 
-```text
-                    BULDACITY TIER 3
-                 BuldacityServer_Tier3.lua
-                         │
-                  BULDACITY/1 : 4242
-                         │
-              ┌──────────┼──────────┐
-              │          │          │
-           Wireless   Wireless   Wired LAN
-              │          │          │
-            Tier 2     Tier 2      Tier 2
-             AE2       Reactor     RFTools
-              │          │          │
-          Maschinen   Generator   Stargate
-```
+Es gibt zwei Varianten:
 
-Die Rechner müssen sich im selben OpenComputers-Netz befinden bzw. die Network Cards müssen sich gegenseitig erreichen können. Bei Wireless Cards muss die Reichweite/Netzabdeckung ausreichen.
+### Variante A – Wireless
 
-## Installation
-
-### 1. Tier 3 Server
-
-Kopiere `BuldacityServer_Tier3.lua` auf den Tier-3-Rechner und starte:
+Jeder Tier-2-PC und der Tier-3-Server bekommen eine Wireless Network Card. Die Rechner müssen sich gegenseitig im Funkbereich erreichen können.
 
 ```text
-BuldacityServer_Tier3.lua
+                 ┌─────────────────────────┐
+                 │   BULDACITY TIER 3       │
+                 │   Server / Desktop       │
+                 │   Wireless Network Card  │
+                 └────────────┬────────────┘
+                              ))
+                 BULDACITY/1 : 4242
+                    )))       )))       )))
+                    │         │         │
+             ┌──────┴───┐ ┌───┴─────┐ ┌─┴────────┐
+             │ Tier 2   │ │ Tier 2  │ │ Tier 2   │
+             │ AE2      │ │ Reactor │ │ SGCraft  │
+             └──────────┘ └─────────┘ └──────────┘
 ```
 
-Der Server öffnet Port **4242** und sendet regelmäßig eine Server-Ankündigung.
+### Variante B – Kabel / Wired
 
-### 2. Tier 2 Controller
+Wenn Wireless nicht benötigt wird, kann das OpenComputers-Netz auch über kompatible Wired-Network-Komponenten aufgebaut werden. Wichtig ist, dass die Modem-Komponenten die jeweiligen Rechner erreichen können.
 
-Kopiere die gewünschten Controller und `BuldacityNetworkClient.lua` auf den Tier-2-Rechner. Am einfachsten ist:
+## Software im Repository
+
+### Server
+
+`BuldacityServer_Tier3.lua`
+
+Der Tier-3-Rechner startet damit den Buldacity-Server-Desktop. Der Desktop besitzt:
+
+- Buldacity-OS-Startleiste
+- Desktop-Ansicht
+- Systemstatus
+- Netzwerkstatus
+- Device Manager
+- Online-/Offline-Erkennung
+- Remote-Control-Ansicht
+- Uhr
+- Touch-Bedienung
+- Tastaturbedienung
+- Server-Ankündigung / Rescan
+
+### Gemeinsamer Client-Dienst
+
+`BuldacityNetworkClient.lua`
+
+Der Dienst erledigt:
+
+- Anmeldung am Buldacity-Netz
+- `HELLO`
+- regelmäßige `HEARTBEAT`-Pakete
+- Server-Erkennung
+- `PING` / `PONG`
+- Empfang von `INPUT`
+- Weitergabe von Remote-Tastatur-, Touch- und Scroll-Signalen an den Tier-2-Computer
+
+OpenComputers stellt für solche Anwendungen das Event-System und Modem-Signale bereit. citeturn0search0
+
+### Launcher
+
+`BuldacityControllerLauncher.lua`
+
+Der Launcher startet den Netzwerkdienst und danach den gewünschten Controller. Dadurch muss nicht jeder Controller separat umgebaut werden, um am gemeinsamen Netzwerk teilzunehmen.
+
+## Unterstützte Controller
+
+Der Launcher enthält aktuell Einträge für:
+
+1. AE2 Network
+2. Diesel Generator / Immersive Engineering
+3. Mekanism
+4. Thermal
+5. ProjectE
+6. RFTools
+7. SGCraft
+8. Big Reactors / Reactor
+9. RotaryCraft
+10. Thermal Expansion
+
+Die jeweiligen Mod-Versionen und Zusatzanforderungen stehen in den einzelnen Controller-Dateien bzw. in der Komponenten-Dokumentation.
+
+## Startreihenfolge
+
+### Tier 3
 
 ```text
-BuldacityControllerLauncher.lua
+1. OpenOS starten
+2. BuldacityServer_Tier3.lua starten
+3. Server-Desktop erscheint
+4. Server sendet regelmäßig SERVER-Ankündigungen
 ```
 
-Der Launcher startet zuerst den gemeinsamen Netzwerkdienst und danach den gewählten Controller.
+### Tier 2
 
-### 3. Verbindung prüfen
+```text
+1. OpenOS starten
+2. BuldacityControllerLauncher.lua starten
+3. Controller auswählen
+4. Netzwerkdienst meldet den Controller am Tier 3 an
+5. Controller startet
+```
 
-Nach dem Start sollte der Tier-3-Desktop die Tier-2-Controller automatisch unter **DEVICES** anzeigen.
+## Verbindung
 
-Ein Controller sendet:
-
-- `HELLO` beim Start
-- `HEARTBEAT` regelmäßig
-- Controllername
-- Rolle
-- Anwendung
-- Bildschirm-/Statusinformation, sofern vom Controller gemeldet
-
-Der Server erkennt einen Client als offline, wenn länger als ungefähr 10 Sekunden kein gültiger Heartbeat empfangen wurde.
-
-## Protokoll
-
-Aktuell:
+Alle Buldacity-Netzpakete verwenden:
 
 - Protokoll: `BULDACITY/1`
-- Modem-Port: `4242`
-- Pakettypen: `HELLO`, `HEARTBEAT`, `STATUS`, `SCREEN`, `SERVER`, `PING`, `PONG`
+- Modem-Port: **4242**
 
-Pakete werden als Lua-Tabelle über das OpenComputers-Modem übertragen.
+Beispiel:
 
-## Sicherheit
+```text
+Tier 2 Controller
+       │
+       │ HELLO
+       ▼
+Tier 3 Server
+       │
+       │ SERVER
+       ▼
+Tier 2 Controller
+       │
+       │ HEARTBEAT alle ~3 s
+       ▼
+Tier 3 Server
+```
 
-Das aktuelle Protokoll ist ein lokales Spiel-/LAN-Protokoll ohne Verschlüsselung oder Authentifizierung. Es sollte nicht als Internet-Sicherheitsprotokoll betrachtet werden.
+Der Server betrachtet einen Controller nach ungefähr 10 Sekunden ohne gültigen Heartbeat als offline.
 
-## Tier-3-Desktop
+## Remote-Steuerung
 
-Der Tier-3-Server besitzt eine PC-artige Buldacity-Oberfläche mit:
+Im Tier-3-Desktop kann ein Gerät unter **DEVICES** ausgewählt und anschließend **REMOTE** geöffnet werden.
 
-- Desktop
-- System-/Netzwerkstatus
-- Geräteverwaltung
-- Online/Offline-Anzeige
-- Remote-Statusseite
-- Taskbar
-- Uhr
-- Tastatursteuerung
-- Touch-Navigation
+Aktuell unterstützt die Remote-Verbindung:
 
-**Wichtig:** Die aktuelle REMOTE-Seite ist eine Status-/Metadatenansicht. Sie spiegelt noch nicht die einzelnen Pixel des Tier-2-Bildschirms. Ein echter Remote-Desktop mit Bildübertragung und Maus-/Tastaturweiterleitung wäre eine separate Erweiterung des Protokolls.
+- Tier-3-Tastatur → Tier-2 `key_down`
+- Tier-3-Tastatur → Tier-2 `key_up`
+- Tier-3-Touch → Tier-2 `touch`
+- Tier-3-Scroll → Tier-2 `scroll`
 
-## Steuerung Server
+Der Tier-2-Client empfängt diese Signale und stellt sie dem lokalen OpenComputers-Eventsystem zur Verfügung.
+
+### Wichtig: Bildschirmübertragung
+
+Ein echter Pixel-Stream des Tier-2-GPU-Bildschirms ist **noch nicht implementiert**. Die aktuelle Remote-Seite ist deshalb eine echte Remote-Steuerung plus Status-/Metadatenansicht, aber kein vollständiges VNC/RDP-artiges Bild.
+
+Der Grund ist die OpenComputers-GPU-Schnittstelle: Das Script kann Zeichen auf den Bildschirm schreiben, bekommt aber nicht einfach einen vollständigen Pixel-/Text-Framebuffer zurück. Deshalb wird keine falsche „Bildschirmspiegelung“ vorgetäuscht.
+
+## Bedienung Tier 3
 
 - `1` = Desktop
-- `2` = Geräteverwaltung
-- `3` = Remote-Ansicht
-- `Pfeil hoch/runter` = Gerät auswählen
+- `2` = Device Manager
+- `3` = Remote
+- `Pfeil hoch` = vorheriges Gerät
+- `Pfeil runter` = nächstes Gerät
 - `R` = Server-Ankündigung / Rescan
 - `Q` = Server beenden
 
-## Controller direkt starten
+Im Remote-Modus werden Tastatur- und Touch-Eingaben an das ausgewählte Tier-2-Gerät weitergeleitet.
 
-Die vorhandenen Controller können weiterhin separat gestartet werden. Für die gemeinsame Netzwerkregistrierung ist der Launcher der empfohlene Einstiegspunkt.
+## Sicherheit
+
+Das aktuelle Protokoll ist für ein Minecraft-LAN gedacht.
+
+Es besitzt derzeit:
+
+- keine Verschlüsselung
+- keine Benutzer-/Passwortauthentifizierung
+- keine kryptografische Geräte-ID-Prüfung
+
+Daher sollte Port **4242** nicht ungeschützt über das öffentliche Internet weitergeleitet werden.
+
+## Fehlerbehebung
+
+### Tier 2 wird nicht angezeigt
+
+Prüfen:
+
+1. Network/Wireless Network Card eingebaut?
+2. Beide Rechner erreichen sich?
+3. Server läuft?
+4. Tier-2-Launcher läuft?
+5. Beide verwenden Port **4242**?
+6. Ist `BuldacityNetworkClient.lua` auf dem Tier-2-Rechner vorhanden?
+7. Ist OpenOS korrekt installiert?
+
+### Controller läuft, aber Remote-Eingaben kommen nicht an
+
+- Controller über `BuldacityControllerLauncher.lua` starten
+- prüfen, dass `BuldacityNetworkClient.lua` geladen werden kann
+- prüfen, dass der Tier-2-Computer Netzwerkpakete empfängt
+- prüfen, dass im Tier 3 das richtige Gerät unter REMOTE ausgewählt ist
+
+## Zielaufbau
+
+```text
+                     ┌──────────────────────────────┐
+                     │      BULDACITY TIER 3         │
+                     │  PC-artiger Server Desktop   │
+                     │  Device Manager / Remote     │
+                     │  Port 4242 / BULDACITY/1    │
+                     └──────────────┬───────────────┘
+                                    │
+             ┌──────────────────────┼─────────────────────┐
+             │                      │                     │
+        ┌────▼─────┐           ┌────▼─────┐         ┌────▼─────┐
+        │ Tier 2   │           │ Tier 2   │         │ Tier 2   │
+        │ AE2      │           │ Reactor  │         │ SGCraft  │
+        └────┬─────┘           └────┬─────┘         └────┬─────┘
+             │                      │                     │
+          ME-Netz               Big Reactor            Stargate
+
+             weitere Tier-2-Controller können parallel
+             über denselben Buldacity-Netzwerkdienst laufen.
+```
