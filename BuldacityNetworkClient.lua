@@ -1,57 +1,94 @@
 -- BuldacityNetworkClient.lua
--- Shared wireless/network service for all Buldacity controllers.
--- OpenComputers 1.7.10 / protocol BULDACITY/1 / port 4242
--- Provides discovery, heartbeat and remote input forwarding.
+-- Shared wireless/network client service for all Buldacity controllers.
+-- OpenComputers 1.7.10 / protocol BULDACITY/2 / port 4242
+-- Uses the common BuldacityWireless transport.
 
-local component=require("component")
-local event=require("event")
-local computer=require("computer")
-local M={PROTOCOL="BULDACITY/1",PORT=4242,TIMEOUT=10,modem=nil,server=nil,lastServer=0}
+local event = require("event")
+local computer = require("computer")
+local wireless = require("BuldacityWireless")
 
-local function modem()
-  if M.modem and type(M.modem.open)=="function" then return M.modem end
-  for address in component.list("modem",true) do M.modem=component.proxy(address); if M.modem then return M.modem end end
+local M = {
+  PROTOCOL = "BULDACITY/2",
+  PORT = 4242,
+  TIMEOUT = 12,
+  modem = nil,
+  server = nil,
+  lastServer = 0
+}
+
+local function packet(kind, data)
+  return wireless.packet(kind, data)
 end
-local function packet(kind,data) return {protocol=M.PROTOCOL,kind=kind,sender=computer.address(),time=computer.uptime(),data=data or {}} end
-function M.init(name,role)
-  M.name=name or "BULDACITY CONTROLLER"; M.role=role or "CLIENT"
-  local m=modem(); if not m then return false,"NO MODEM" end
-  m.open(M.PORT); return true
+
+function M.init(name, role)
+  M.name = name or "BULDACITY CONTROLLER"
+  M.role = role or "CLIENT"
+  local ok, mode = wireless.init(M.PORT)
+  if not ok then return false, mode or "NO_MODEM" end
+  M.mode = mode
+  M.modem = wireless.modem
+  return true, mode
 end
-function M.send(address,kind,data)
-  local m=modem(); if not m then return false end
-  return m.send(address,M.PORT,packet(kind,data))
+
+function M.send(address, kind, data)
+  return wireless.send(address, kind, data)
 end
-function M.broadcast(kind,data)
-  local m=modem(); if not m then return false end
-  return m.broadcast(M.PORT,packet(kind,data))
+
+function M.broadcast(kind, data)
+  return wireless.broadcast(kind, data)
 end
-function M.hello(extra) extra=extra or {}; extra.name=M.name; extra.role=M.role; extra.app=M.name; return M.broadcast("HELLO",extra) end
-function M.heartbeat(extra) extra=extra or {}; extra.name=M.name; extra.role=M.role; extra.app=M.name; extra.uptime=computer.uptime(); extra.serverOnline=M.server~=nil and computer.uptime()-M.lastServer<=M.TIMEOUT; return M.broadcast("HEARTBEAT",extra) end
-function M.handleInput(sender,data)
-  if type(data)~="table" then return end
-  local kind=data.event
-  if kind=="key_down" or kind=="key_up" then
-    pcall(computer.pushSignal,kind,sender,data.char or 0,data.code or 0)
-  elseif kind=="touch" then
-    pcall(computer.pushSignal,"touch",sender,data.x or 1,data.y or 1,data.button or 0)
-  elseif kind=="scroll" then
-    pcall(computer.pushSignal,"scroll",sender,data.x or 0,data.y or 0,data.button or 0)
+
+function M.hello(extra)
+  extra = extra or {}
+  extra.name = M.name
+  extra.role = M.role
+  extra.app = M.name
+  extra.mode = M.mode
+  return M.broadcast("HELLO", extra)
+end
+
+function M.heartbeat(extra)
+  extra = extra or {}
+  extra.name = M.name
+  extra.role = M.role
+  extra.app = M.name
+  extra.uptime = computer.uptime()
+  extra.serverOnline = M.server ~= nil and computer.uptime() - M.lastServer <= M.TIMEOUT
+  extra.mode = M.mode
+  return M.broadcast("HEARTBEAT", extra)
+end
+
+function M.handleInput(sender, data)
+  if type(data) ~= "table" then return end
+  local kind = data.event
+  if kind == "key_down" or kind == "key_up" then
+    pcall(computer.pushSignal, kind, sender, data.char or 0, data.code or 0)
+  elseif kind == "touch" then
+    pcall(computer.pushSignal, "touch", sender, data.x or 1, data.y or 1, data.button or 0)
+  elseif kind == "scroll" then
+    pcall(computer.pushSignal, "scroll", sender, data.x or 0, data.y or 0, data.button or 0)
   end
 end
-function M.start(name,role,extra)
-  if not M.init(name,role) then return false end
+
+function M.start(name, role, extra)
+  local ok, err = M.init(name, role)
+  if not ok then return false, err end
   M.hello(extra)
-  event.listen("modem_message",function(_,receiver,sender,port,distance,...)
-    if port~=M.PORT then return end
-    local p=(...)
-    if type(p)=="table" and p.protocol==M.PROTOCOL then
-      if p.kind=="SERVER" or p.kind=="SERVER_HELLO" or p.kind=="PONG" then M.server=sender; M.lastServer=computer.uptime() end
-      if p.kind=="PING" then M.send(sender,"PONG",{name=M.name,role=M.role,app=M.name}) end
-      if p.kind=="INPUT" then M.handleInput(sender,p.data) end
+
+  event.listen("modem_message", function(_, receiver, sender, port, distance, payload)
+    if port ~= M.PORT or not wireless.valid(payload) then return end
+    if payload.kind == "SERVER_HELLO" or payload.kind == "SERVER" or payload.kind == "PONG" then
+      M.server = sender
+      M.lastServer = computer.uptime()
+    elseif payload.kind == "PING" then
+      M.send(sender, "PONG", {name=M.name, role=M.role, app=M.name})
+    elseif payload.kind == "INPUT" then
+      M.handleInput(sender, payload.data)
     end
   end)
-  event.timer(3,function() M.heartbeat(extra) end,math.huge)
-  return true
+
+  event.timer(3, function() M.heartbeat(extra) end, math.huge)
+  return true, M.mode
 end
+
 return M
