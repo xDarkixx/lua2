@@ -8,8 +8,11 @@ local options={
  {"ProjectE","ProjectE_Modern.lua"},{"RFTools","RFTools_Modern.lua"},
  {"SGCraft","SGCraft_Modern.lua"},{"Reactor","ReactorBigReactors043A_Touch_Responsive.lua"},
  {"RotaryCraft","RotaryCraftDashboard_Modern.lua"},{"Thermal Expansion","ThermalExpansion_Modern.lua"},
- {"PneumaticCraft","PneumaticCraftNetwork_Modern.lua"},
- {"LogisticsPipes","LogisticsPipesNetwork_Modern.lua"}}
+ {"PneumaticCraft","PneumaticCraftNetwork_Modern.lua"},{"LogisticsPipes","LogisticsPipesNetwork_Modern.lua"},
+ {"Immersive Engineering","ImmersiveEngineering_Network_Modern.lua"},
+ {"Immersive Integration","ImmersiveIntegration_Network_Modern.lua"},
+ {"Immersive Railroading","ImmersiveRailroading_Network_Modern.lua"},
+ {"IndustrialCraft 2","IndustrialCraft2_Network_Modern.lua"}}
 print("BULDACITY CONTROLLER LAUNCHER // NETWORK")
 for i,v in ipairs(options) do print(string.format("%2d  %s",i,v[1])) end
 io.write("Select controller: ")
