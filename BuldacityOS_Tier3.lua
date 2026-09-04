@@ -1,27 +1,22 @@
 -- BuldacityOS_Tier3.lua
 -- BULDACITY OS // Tier-3 OpenComputers main entry point
--- The complete graphical desktop lives in BuldacityDesktop.lua.
+-- The complete graphical desktop lives in /home/BuldacityDesktop.lua.
 -- Minecraft 1.7.10 / OpenComputers 1.8.10
+-- All BULDACITY application files are installed under /home.
 
 local filesystem=require("filesystem")
 
-local candidates={
-  "/BuldacityDesktop.lua",
-  "/home/BuldacityDesktop.lua",
-  "/usr/lib/BuldacityDesktop.lua"
-}
-
-local desktop=nil
-for i=1,#candidates do
-  if filesystem.exists(candidates[i]) and not filesystem.isDirectory(candidates[i]) then
-    desktop=candidates[i]
-    break
-  end
+local desktop="/home/BuldacityDesktop.lua"
+if not filesystem.exists(desktop) or filesystem.isDirectory(desktop) then
+  error("BULDACITY OS: /home/BuldacityDesktop.lua not found")
 end
 
-if not desktop then
-  error("BULDACITY OS: BuldacityDesktop.lua not found. Checked /, /home and /usr/lib")
-end
+-- Make /home the working directory so relative OpenOS module lookup and
+-- shell.resolve() consistently refer to the BULDACITY installation.
+pcall(function()
+  local shell=require("shell")
+  shell.setWorkingDirectory("/home")
+end)
 
 local ok,err=pcall(dofile,desktop)
 if not ok then
