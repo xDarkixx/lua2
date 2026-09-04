@@ -12,7 +12,7 @@ local gpu=component.gpu
 
 local HOME="/home/"
 local PORT=4242
-local VERSION="8.0"
+local VERSION="8.1"
 pcall(function() shell.setWorkingDirectory(HOME) end)
 package.path=HOME.."?.lua;"..HOME.."?/init.lua;"..(package.path or "")
 
@@ -20,6 +20,7 @@ local W,H=gpu.getResolution()
 local page="DESKTOP"
 local selected=1
 local appSelected=1
+local componentSelected=1
 local running=true
 local dirty=true
 local status="STARTING"
@@ -46,6 +47,26 @@ local function button(x,y,w,label,c,active) local bg=active and C.panel2 or C.ba
 local function online(d) return d and now()-(d.last or 0)<12 end
 local function listDevices() local r={};for _,d in pairs(devices) do r[#r+1]=d end;table.sort(r,function(a,b)return tostring(a.name or a.address)<tostring(b.name or b.address) end);return r end
 local function selectedDevice() local l=listDevices();if #l==0 then return nil end;selected=clamp(selected,1,#l);return l[selected] end
+local function componentList(d)
+ local r={}
+ if d and type(d.components)=="table" then for _,c in ipairs(d.components) do if type(c)=="table" then r[#r+1]=c end end end
+ table.sort(r,function(a,b) if tostring(a.type)==tostring(b.type) then return tostring(a.address)<tostring(b.address) end return tostring(a.type)<tostring(b.type) end)
+ return r
+end
+local function syncComponentInventory()
+ local inv=_G.BuldacityComponents
+ if type(inv)~="table" then return end
+ for address,d in pairs(inv.clients or {}) do
+  if type(d)=="table" then
+   devices[address]=devices[address] or {address=address}
+   local localD=devices[address]
+   for k,v in pairs(d) do localD[k]=v end
+   localD.address=address
+   if d.last then localD.last=tonumber(d.last) or localD.last end
+   localD.componentCount=tonumber(d.count) or (type(d.components)=="table" and #d.components or 0)
+  end
+ end
+end
 
 local function remember(sender,p,distance)
  if not sender or not p then return end
@@ -77,6 +98,7 @@ local function syncDiagnostics()
    localD.linked=d.linked==true or d.result=="LINKED"
   end
  end
+ syncComponentInventory()
 end
 
 local function scan()
@@ -124,7 +146,7 @@ local function desktop()
  top("DESKTOP","WORKSPACE // REAL-TIME CLIENT FLEET")
  local l=listDevices();local up=0;for _,d in ipairs(l) do if online(d) then up=up+1 end end
  panel(3,7,25,11,"SYSTEM",C.cyan);text(6,10,"CLIENTS",C.dim);text(16,10,up.." / "..#l,C.cyan);text(6,12,"NETWORK",C.dim);text(16,12,"BULDACITY/2",C.green);text(6,14,"PORT",C.dim);text(16,14,PORT,C.yellow);text(6,16,"SCAN",C.dim);text(16,16,lastScan>0 and string.format("%.0fs ago",now()-lastScan) or "never",C.white);button(5,18,21,"SCAN CLIENTS",C.cyan)
- panel(31,7,24,11,"PC FLEET",C.purple);text(34,10,"LINKED",C.dim);local linked=0;for _,d in ipairs(l) do if d.linked then linked=linked+1 end end;text(44,10,linked,C.green);text(34,12,"ONLINE",C.dim);text(44,12,up,C.cyan);text(34,14,"OFFLINE",C.dim);text(44,14,#l-up,C.red);text(34,16,"SELECT",C.dim);text(44,16,"DEVICES",C.purple)
+ panel(31,7,24,11,"PC FLEET",C.purple);text(34,10,"LINKED",C.dim);local linked=0;for _,d in ipairs(l) do if d.linked then linked=linked+1 end end;text(44,10,linked,C.green);text(34,12,"ONLINE",C.dim);text(44,12,up,C.cyan);text(34,14,"OFFLINE",C.dim);text(44,14,#l-up,C.red);text(34,16,"COMPONENTS",C.dim);local cc=0;for _,d in ipairs(l) do cc=cc+(tonumber(d.componentCount) or 0) end;text(44,16,cc,C.purple)
  panel(61,7,18,11,"QUICK",C.pink);button(63,10,14,"[APP] APPS",C.pink);button(63,14,14,"[PC] REMOTE",C.cyan);button(63,18,14,"[RX] REACTOR",C.green)
  panel(3,21,76,12,"LIVE CLIENTS",C.green)
  if #l==0 then text(7,26,"NO CLIENTS YET",C.yellow);text(7,28,"Press R or click SCAN CLIENTS. Check /home/autorun.lua on each client.",C.dim) end
@@ -134,16 +156,22 @@ end
 
 local function networkPage()
  top("NETWORK","DISCOVERY // WIRED + WIRELESS + RELAY")
- local ns=network.status();panel(3,7,76,8,"NETWORK CORE",C.cyan);text(6,10,"PORT",C.dim);text(14,10,PORT,C.yellow);text(25,10,"LOCAL",C.dim);text(33,10,ns.wireless and "WIRELESS" or "WIRED",ns.wireless and C.purple or C.cyan);text(49,10,"RELAY",C.dim);text(57,10,ns.relayPathType or "NONE",ns.relayDetected and C.green or C.dim);button(62,12,14,"SCAN",C.yellow)
+ local ns=network.status();local inv=_G.BuldacityComponents or {};local sc=inv.server or {};panel(3,7,76,8,"NETWORK CORE",C.cyan);text(6,10,"PORT",C.dim);text(14,10,PORT,C.yellow);text(25,10,"LOCAL",C.dim);text(33,10,ns.wireless and "WIRELESS" or "WIRED",ns.wireless and C.purple or C.cyan);text(49,10,"RELAY",C.dim);text(57,10,ns.relayPathType or "NONE",ns.relayDetected and C.green or C.dim);text(6,12,"SERVER COMPONENTS",C.dim);text(25,12,tostring(sc.count or 0),C.purple);text(37,12,"CLIENT INVENTORIES",C.dim);text(58,12,tostring((function() local n=0;for _ in pairs(inv.clients or {}) do n=n+1 end;return n end)()),C.green);button(62,12,14,"SCAN",C.yellow)
  panel(3,17,76,math.max(8,H-21),"CLIENT DIAGNOSTICS",C.purple);local l=listDevices();if #l==0 then text(7,22,"No HELLO/HEARTBEAT received.",C.yellow) end
- for i,d in ipairs(l) do local y=19+i;if y>H-6 then break end;local st=online(d) and (d.linked and "LINKED" or d.result or "ONLINE") or "OFFLINE";local sc=st=="LINKED" and C.green or st=="OFFLINE" and C.red or C.yellow;text(6,y,fit(d.name or "CLIENT",22),C.white);text(30,y,st,sc);text(41,y,fit(d.link or "--",9),d.wireless and C.purple or C.cyan);text(52,y,tostring(d.distance or 0),C.yellow);text(59,y,d.latency and string.format("%.0fms",d.latency) or "--",C.white);text(69,y,d.relayDetected and "YES" or "--",C.dim) end;taskbar()
+ for i,d in ipairs(l) do local y=19+i;if y>H-6 then break end;local st=online(d) and (d.linked and "LINKED" or d.result or "ONLINE") or "OFFLINE";local cs=st=="LINKED" and C.green or st=="OFFLINE" and C.red or C.yellow;text(6,y,fit(d.name or "CLIENT",20),C.white);text(27,y,st,cs);text(38,y,fit(d.link or "--",9),d.wireless and C.purple or C.cyan);text(48,y,tostring(d.distance or 0),C.yellow);text(55,y,d.latency and string.format("%.0fms",d.latency) or "--",C.white);text(65,y,tostring(d.componentCount or 0),C.purple) end;taskbar()
 end
 
 local function devicesPage()
- top("DEVICES","DEVICE MANAGER // SELECT A CLIENT PC")
- local l=listDevices();panel(3,7,46,H-11,"CLIENT PCs",C.purple);if #l==0 then text(7,12,"No clients discovered.",C.yellow) end
- for i,d in ipairs(l) do local y=9+i;if y>H-6 then break end;local a=i==selected;if a then fill(5,y,42,2,C.panel2);fill(5,y,2,2,C.cyan) end;text(8,y,string.format("%02d",i),C.dim);text(13,y,fit(d.name or "CLIENT",20),a and C.cyan or C.white);text(35,y,online(d) and "● ON" or "○ OFF",online(d) and C.green or C.red) end
- local d=selectedDevice();panel(52,7,27,H-11,"SELECTED PC",C.cyan);if d then text(55,11,"NAME",C.dim);text(55,12,fit(d.name,20),C.white);text(55,15,"ADDRESS",C.dim);text(55,16,fit(d.address,20),C.white);text(55,19,"LINK",C.dim);text(55,20,d.link or "--",d.wireless and C.purple or C.cyan);text(55,23,"STATUS",C.dim);text(55,24,d.linked and "LINKED" or (online(d) and "ONLINE" or "OFFLINE"),d.linked and C.green or (online(d) and C.yellow or C.red));button(55,28,20,"OPEN REMOTE PC",C.cyan);button(55,32,20,"PING",C.green) else text(55,13,"Select a client.",C.dim) end;taskbar()
+ top("DEVICES","DEVICE MANAGER // CLIENT + COMPONENT IDS")
+ local l=listDevices();panel(3,7,38,H-11,"CLIENT PCs",C.purple);if #l==0 then text(7,12,"No clients discovered.",C.yellow) end
+ for i,d in ipairs(l) do local y=9+i;if y>H-6 then break end;local a=i==selected;if a then fill(5,y,34,2,C.panel2);fill(5,y,2,2,C.cyan) end;text(8,y,string.format("%02d",i),C.dim);text(13,y,fit(d.name or "CLIENT",16),a and C.cyan or C.white);text(31,y,online(d) and "ON" or "OFF",online(d) and C.green or C.red) end
+ local d=selectedDevice();panel(43,7,36,H-11,"COMPONENT INVENTORY",C.cyan)
+ if d then
+  text(46,10,"PC",C.dim);text(51,10,fit(d.name or d.address,25),C.white);text(46,12,"PC ADDRESS",C.dim);text(46,13,fit(d.address,30),C.cyan);text(46,15,"COMPONENTS",C.dim);text(58,15,tostring(d.componentCount or 0),C.purple)
+  local cl=componentList(d);componentSelected=clamp(componentSelected,1,math.max(1,#cl));if #cl==0 then text(46,18,"Waiting for component inventory...",C.yellow) else for i,c in ipairs(cl) do local y=17+i;if y>H-5 then break end;local a=i==componentSelected;if a then fill(45,y,31,2,C.panel2) end;text(47,y,fit(c.type or "unknown",12),a and C.cyan or C.white);text(60,y,fit(c.address or "?",16),C.dim) end end
+  text(46,H-5,"↑/↓ select component",C.dim)
+ else text(46,12,"Select a client PC.",C.yellow) end
+taskbar()
 end
 
 local function appsPage()
@@ -179,7 +207,7 @@ local ok,mode=network.startServer(function(sender,p,distance)
 end)
 if not ok then error("BULDACITY: modem/network card required: "..tostring(mode)) end
 network.broadcast("SERVER_HELLO",{name="BULDACITY TIER-3",role="SERVER",app="BULDACITY OS",version=VERSION,protocol="BULDACITY/2",port=PORT,discover=true})
-log("BULDACITY OS v"..VERSION.." started; discovery active")
+log("BULDACITY OS v"..VERSION.." started; discovery + component inventory active")
 
 event.timer(2,function() syncDiagnostics();dirty=true end,math.huge)
 event.timer(4,function() scan() end,math.huge)
@@ -208,7 +236,7 @@ while running do
   if y>=H-3 then if x<12 then page="DESKTOP" elseif x<22 then page="NETWORK" elseif x<32 then page="DEVICES" elseif x<42 then page="APPS" elseif x<52 then page="REMOTE" elseif x<62 then page="REACTOR" end
   elseif page=="DESKTOP" and x>=5 and x<=26 and y>=18 and y<=20 then scan()
   elseif page=="NETWORK" and x>=60 and y>=12 and y<=15 then scan()
-  elseif page=="DEVICES" then if x<50 and y>=10 and y<10+#listDevices() then selected=clamp(y-9,1,#listDevices()) elseif x>=54 and y>=28 and y<36 then page="REMOTE" end
+  elseif page=="DEVICES" then if x<42 and y>=10 and y<10+#listDevices() then selected=clamp(y-9,1,#listDevices()) elseif x>=43 and y>=7 then page="REMOTE" end
   elseif page=="APPS" and y>=10 and y<10+#localApps() then appSelected=clamp(y-9,1,#localApps());launchApp()
   elseif page=="REMOTE" then local rd=selectedDevice();if rd and x>=64 then local kind;if y<15 then kind="UP" elseif y<19 then kind="DOWN" elseif y<23 then kind="LEFT" elseif y<27 then kind="RIGHT" elseif y<31 then kind="ENTER" else kind="touch" end;network.send(rd.address,"INPUT",{event=kind,x=x,y=y,button=button}) elseif rd then network.send(rd.address,"INPUT",{event="touch",x=x,y=y,button=button}) end end
   dirty=true
