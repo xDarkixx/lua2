@@ -3,6 +3,7 @@
 -- Minecraft 1.7.10 / RFTools 4.23
 
 local Network=require("Network")
+local shell=require("shell")
 local ok,mode=Network.startClient("RFTools // Command Center",{
   controller="RFTools_Modern.lua",
   mod="RFTools",
@@ -13,4 +14,4 @@ if not ok then
   io.stderr:write("BULDACITY Network unavailable: "..tostring(mode).."\n")
 end
 
-dofile("RFTools_Modern.lua")
+dofile(shell.resolve("RFTools_Modern.lua"))
