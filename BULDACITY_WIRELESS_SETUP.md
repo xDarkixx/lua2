@@ -2,18 +2,20 @@
 
 ## Zielaufbau
 
-Dieses Dokument beschreibt den kompletten Aufbau des BULDACITY-Netzwerks für Minecraft 1.7.10 mit OpenComputers:
+Dieses Dokument beschreibt den aktuellen BULDACITY-Netzwerkaufbau für Minecraft 1.7.10 mit OpenComputers:
 
 - Forge 10.13.4.1614
-- Tier-3 Hauptserver
+- Tier-3 Hauptserver mit `BuldacityOS_Tier3.lua`
 - Tier-2/3 Maschinen-Controller
-- Wireless Network Card
+- Wireless Network Card oder kompatible Network Card
 - OC-Kabel für lokale Maschinenverbindungen
 - Funkverbindung zwischen Zentrale und Clients
 - BULDACITY/2 auf Modem-Port `4242`
+- zentrale Desktop-Oberfläche mit Apps
+- Geräteverwaltung und Live-Remote-Oberflächen
 - keine Whitelist erforderlich
 
-Die Netzwerkverbindung und die Maschinenverbindung sind getrennt: Funk überträgt BULDACITY-Daten, OC-Kabel verbinden einen Controller lokal mit den dafür vorgesehenen Maschinen-/Adapter-Komponenten.
+Die Netzwerkverbindung und die Maschinenverbindung bleiben getrennt: Funk überträgt BULDACITY-Daten und die Controller-Oberflächen, OC-Kabel verbinden einen Controller lokal mit den vorgesehenen Maschinen-/Adapter-Komponenten.
 
 ---
 
@@ -33,7 +35,7 @@ Die Netzwerkverbindung und die Maschinenverbindung sind getrennt: Funk überträ
 Pro überwachte Maschine bzw. Maschinengruppe:
 
 - Tier-2 oder Tier-3 Computer
-- GPU + Screen, wenn eine lokale Anzeige benötigt wird
+- GPU + Screen für eine lokale Oberfläche
 - Keyboard, wenn lokale Bedienung benötigt wird
 - Wireless Network Card
 - benötigte OpenComputers-Adapter bzw. kompatible Komponenten
@@ -46,16 +48,20 @@ Nicht jede Minecraft-Maschine wird direkt mit einem beliebigen OC-Adapter verbun
 
 ---
 
-# 2. Verkabelung der Tier-3-Zentrale
+# 2. Tier-3-Zentrale
 
-Der Hauptserver besteht aus Computer, GPU, Screen, Keyboard und Wireless Network Card.
+Die Zentrale verwendet jetzt ausschließlich:
+
+```text
+BuldacityOS_Tier3.lua
+```
+
+Der alte `BuldacityDesktop_Tier3.lua` wird nicht mehr verwendet.
 
 ```text
                     ┌─────────────────────┐
                     │       SCREEN        │
                     └──────────┬──────────┘
-                               │
-                         Bildschirm
                                │
                     ┌──────────▼──────────┐
                     │         GPU          │
@@ -63,8 +69,8 @@ Der Hauptserver besteht aus Computer, GPU, Screen, Keyboard und Wireless Network
                                │
                     ┌──────────▼──────────┐
                     │      TIER-3 PC      │
-                    │                     │
-                    │ CPU / RAM / Speicher│
+                    │   BULDACITY OS      │
+                    │ CPU / RAM / Storage │
                     └───────┬───────┬─────┘
                             │       │
                        Keyboard    │
@@ -75,33 +81,33 @@ Der Hauptserver besteht aus Computer, GPU, Screen, Keyboard und Wireless Network
                          └─────────────────────┘
 ```
 
-### Physischer Aufbau
+### Desktop-Apps
 
-1. Tier-3 Computer platzieren.
-2. GPU einsetzen.
-3. Screen anschließen.
-4. Keyboard anschließen.
-5. Wireless Network Card einsetzen.
-6. Computer starten.
-7. Prüfen, ob der Modem-/Wireless-Anschluss erkannt wird.
+Der Tier-3-Desktop besitzt unter anderem:
 
-Die Wireless Network Card benötigt kein OC-Kabel zur Netzwerkzentrale. Sie arbeitet über das OpenComputers-Modem-Interface.
+- HOME
+- NETWORK
+- DEVICES
+- CONTROLLER APPS
+- REMOTE INTERFACE
+- TERMINAL
+- SYSTEM MONITOR
+
+Unter `DEVICES` werden die gefundenen Controller angezeigt. Über `REMOTE` kann die Oberfläche eines ausgewählten Controllers zentral betrachtet und bedient werden.
 
 ---
 
 # 3. Netzwerkaufbau
-
-Die zentrale Funkverbindung sieht so aus:
 
 ```text
                          MINECRAFT-WELT
 
                   ┌────────────────────────┐
                   │     TIER-3 ZENTRALE    │
-                  │                        │
-                  │ Computer + GPU + Screen│
-                  │ Wireless Network Card  │
-                  │ BULDACITY/2 : 4242     │
+                  │    BULDACITY OS        │
+                  │  GPU + Screen + KB      │
+                  │  Wireless Network Card │
+                  │  BULDACITY/2 : 4242    │
                   └───────────┬────────────┘
                               ))))
                            WIRELESS
@@ -110,8 +116,7 @@ Die zentrale Funkverbindung sieht so aus:
              ))))             ))))             ))))
        ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
        │ OC CLIENT 01│  │ OC CLIENT 02│  │ OC CLIENT 03│
-       │ Wireless    │  │ Wireless    │  │ Wireless    │
-       │ Network Card│  │ Network Card │  │ Network Card│
+       │ Controller  │  │ Controller  │  │ Controller  │
        └──────┬──────┘  └──────┬──────┘  └──────┬──────┘
               │                │                │
               ▼                ▼                ▼
@@ -119,16 +124,48 @@ Die zentrale Funkverbindung sieht so aus:
            CONTROL          CONTROL           CONTROL
 ```
 
-`))))` bedeutet Funk. Es gibt keine physische Netzwerkleitung zwischen den einzelnen Wireless-Clients und der Tier-3-Zentrale.
+`))))` bedeutet Funk. Zwischen Wireless-Clients und Tier-3-Zentrale ist keine physische Netzwerkleitung erforderlich.
 
 ---
 
-# 4. Verkabelung eines Maschinen-Controllers
+# 4. Live-Oberfläche der Controller
 
-Ein Maschinen-Controller hat zwei getrennte Aufgaben:
+Die Controller können ihre aktuelle OpenComputers-GPU-Oberfläche an den Tier-3-Desktop übertragen.
 
-1. lokale Verbindung zur Maschine
-2. Funkverbindung zur BULDACITY-Zentrale
+Ablauf:
+
+```text
+┌────────────────┐       BULDACITY/2       ┌──────────────────┐
+│ Tier-2/3       │  ====================>  │ Tier-3 Desktop   │
+│ Controller     │      SCREEN_ROW         │ Remote Interface │
+│ GPU + Screen   │  <====================  │                 │
+└────────────────┘     INPUT / PING        └──────────────────┘
+```
+
+Der Client überträgt:
+
+- `SCREEN_BEGIN`
+- `SCREEN_ROW`
+- `SCREEN_END`
+
+Der Tier-3-Desktop baut daraus die Controller-Oberfläche auf.
+
+Zusätzlich können Eingaben übertragen werden:
+
+- Tastatur `key_down`
+- Tastatur `key_up`
+- Touch
+- Scroll
+
+Damit kann die Zentrale die laufende Controller-Oberfläche ansehen und Eingaben an den ausgewählten Controller weiterreichen.
+
+### Hinweis
+
+Die Übertragung erfolgt als GPU-Zeichen-/Farbzellen und nicht als Minecraft-Pixel-Video. Dadurch bleibt die Lösung für OpenComputers geeignet und benötigt keinen externen VNC/RDP-Dienst.
+
+---
+
+# 5. Verkabelung eines Maschinen-Controllers
 
 ```text
  ┌─────────────────────┐
@@ -150,7 +187,6 @@ Ein Maschinen-Controller hat zwei getrennte Aufgaben:
             ▼
  ┌─────────────────────┐
  │ Maschine / Anlage   │
- │                     │
  │ Reaktor / Diesel /  │
  │ AE2 / IC2 / etc.    │
  └─────────────────────┘
@@ -162,116 +198,46 @@ Ein Maschinen-Controller hat zwei getrennte Aufgaben:
        TIER-3 ZENTRALE
 ```
 
-### Kabelführung
-
-- OC-Kabel möglichst kurz und übersichtlich verlegen.
-- Kabel nicht unnötig über große Distanzen führen.
-- Controller möglichst nahe an der zu steuernden Maschine platzieren.
-- Wireless Network Card im Controller verwenden, damit die BULDACITY-Kommunikation unabhängig von der Maschinenverkabelung bleibt.
-
 ---
 
-# 5. Große Anlage / Maschinenhalle
+# 6. Software
 
-Für eine größere Basis empfiehlt sich eine sternförmige Struktur.
+## Tier-3
+
+Mindestens:
 
 ```text
-                         ┌────────────────┐
-                         │ TIER-3 SERVER  │
-                         │ ZENTRALE       │
-                         │ Port 4242      │
-                         └───────┬────────┘
-                                 │
-          ┌──────────────────────┼──────────────────────┐
-          │                      │                      │
-       WIRELESS               WIRELESS               WIRELESS
-          │                      │                      │
-          ▼                      ▼                      ▼
-   ┌────────────┐         ┌────────────┐         ┌────────────┐
-   │ ENERGIE    │         │ MASCHINEN  │         │ LAGER      │
-   │ CONTROLLER │         │ CONTROLLER │         │ CONTROLLER │
-   └─────┬──────┘         └─────┬──────┘         └─────┬──────┘
-         │                      │                      │
-       OC-Kabel               OC-Kabel               OC-Kabel
-         │                      │                      │
-    ┌────┼────┐             ┌───┼────┐             ┌───┼────┐
-    ▼    ▼    ▼             ▼   ▼    ▼             ▼   ▼    ▼
- Reactor Diesel IC2       Mekanism Thermal IE/Rotary AE2  Storage
+BuldacityWireless.lua
+BuldacityNetworkClient.lua
+BuldacityOS_Tier3.lua
 ```
 
-So kann jeder Bereich seinen eigenen Controller bekommen, während der Tier-3-Server als zentrale Bedienoberfläche dient.
-
----
-
-# 6. Empfohlene physische Raumaufteilung
+Der Tier-3-Desktop startet:
 
 ```text
-┌───────────────────────────────────────────────────────────┐
-│                     HAUPTZENTRALE                         │
-│                                                           │
-│   ┌──────────────┐       ┌──────────────────────────┐     │
-│   │ Tier-3 PC    │       │ Bildschirm / Bedienplatz │     │
-│   │ Wireless     │──────▶│ Buldacity Desktop        │     │
-│   └──────────────┘       └──────────────────────────┘     │
-│                                                           │
-└───────────────────────────────┬───────────────────────────┘
-                                │
-                           WIRELESS ))))
-                                │
-          ┌─────────────────────┼─────────────────────┐
-          ▼                     ▼                     ▼
-┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
-│ ENERGIEHALLE    │   │ MASCHINENHALLE  │   │ LAGER           │
-│                 │   │                 │   │                 │
-│ OC Controller   │   │ OC Controller   │   │ OC Controller   │
-│      │          │   │      │          │   │      │          │
-│    OC-Kabel     │   │    OC-Kabel     │   │    OC-Kabel     │
-│      ▼          │   │      ▼          │   │      ▼          │
-│ Generatoren     │   │ Maschinen       │   │ AE2/Storage     │
-│ Reactor         │   │ RotaryCraft     │   │ Systeme         │
-└─────────────────┘   └─────────────────┘   └─────────────────┘
+BuldacityOS_Tier3.lua
 ```
 
----
+## Controller
 
-# 7. Software auf dem Hauptserver
+Mindestens:
 
-Die Dateien auf den OpenComputers-Speicher kopieren:
-
-- `BuldacityWireless.lua`
-- `BuldacityDesktop_Tier3.lua`
-- bei Bedarf weitere BULDACITY-Dateien
+```text
+BuldacityWireless.lua
+BuldacityNetworkClient.lua
+BuldacityControllerLauncher.lua
+<Controller-Lua-Datei>
+```
 
 Start:
-
-```text
-BuldacityDesktop_Tier3.lua
-```
-
-Der Desktop initialisiert das Netzwerk über die OpenComputers-Modem-Komponente.
-
----
-
-# 8. Software auf einem Maschinen-Controller
-
-Auf jeden Controller kommen mindestens:
-
-- `BuldacityWireless.lua`
-- `BuldacityNetworkClient.lua`
-- `BuldacityControllerLauncher.lua`
-- das benötigte Controller-Skript
-
-Start über:
 
 ```text
 BuldacityControllerLauncher.lua
 ```
 
-Der Controller verbindet sich anschließend drahtlos mit der BULDACITY-Zentrale.
-
 ---
 
-# 9. Netzwerkstandard
+# 7. Netzwerkstandard
 
 ```text
 Protokoll: BULDACITY/2
@@ -279,7 +245,7 @@ Port:      4242
 Transport: OpenComputers modem
 ```
 
-Verwendet werden die echten OpenComputers-Funktionen:
+Verwendete OpenComputers-Funktionen:
 
 - `component.list("modem")`
 - `modem.open(4242)`
@@ -291,29 +257,56 @@ Es wird keine künstliche TCP/IP-Schicht benötigt.
 
 ---
 
-# 10. Testaufbau
+# 8. Controller-Apps
 
-Zuerst nur einen Controller anschließen.
+Der zentrale Desktop kann die vorhandenen BULDACITY-Controller verwalten, unter anderem:
 
-```text
-       TIER-3 SERVER
-            │
-         WIRELESS
-            │
-            ▼
-       TEST CLIENT
-            │
-         OC-Kabel
-            │
-            ▼
-        TEST-MASCHINE
-```
+- AE2
+- Diesel / Immersive Engineering
+- Mekanism
+- Thermal
+- ProjectE
+- RFTools
+- SGCraft
+- Reactor / Big Reactors
+- RotaryCraft
+- Thermal Expansion
+- PneumaticCraft
+- LogisticsPipes
+- Immersive Engineering
+- Immersive Integration
+- Immersive Railroading
+- IndustrialCraft 2
+- Galacticraft
+- ExtraPlanets
+- Forestry
+- Gendustry
 
-Erst wenn dieser Aufbau funktioniert, weitere Controller hinzufügen.
+Die App-Liste prüft, ob die jeweilige Lua-Datei auf dem Tier-3-System vorhanden ist. Die eigentliche Maschinensteuerung läuft weiterhin auf dem jeweiligen Controller.
 
 ---
 
-# 11. Testreihenfolge
+# 9. Bedienung Tier 3
+
+```text
+1 = HOME
+2 = NETWORK
+3 = DEVICES
+4 = CONTROLLER APPS
+5 = REMOTE
+6 = TERMINAL
+7 = SYSTEM
+Q = Desktop beenden
+R = Netzwerk-Ankündigung / Remote-Refresh
+Pfeil hoch/runter = Gerät auswählen
+ENTER = ausgewählten Controller öffnen
+```
+
+In `REMOTE` werden Tastatur-, Touch- und Scroll-Eingaben an den ausgewählten Controller weitergegeben.
+
+---
+
+# 10. Testreihenfolge
 
 ### Hauptserver
 
@@ -324,6 +317,7 @@ Erst wenn dieser Aufbau funktioniert, weitere Controller hinzufügen.
 - [ ] GPU funktioniert
 - [ ] Screen funktioniert
 - [ ] Wireless Network Card wird erkannt
+- [ ] `BuldacityOS_Tier3.lua` startet
 
 ### Netzwerk
 
@@ -334,6 +328,20 @@ Erst wenn dieser Aufbau funktioniert, weitere Controller hinzufügen.
 - [ ] HEARTBEAT funktioniert
 - [ ] PING/PONG funktioniert
 
+### Remote-Oberfläche
+
+- [ ] Controller erscheint unter DEVICES
+- [ ] Controller steht auf ONLINE
+- [ ] REMOTE öffnen
+- [ ] `SCREEN_REQUEST` wird gesendet
+- [ ] `SCREEN_BEGIN` kommt an
+- [ ] `SCREEN_ROW` kommt an
+- [ ] `SCREEN_END` kommt an
+- [ ] Oberfläche wird auf dem Tier-3-Screen dargestellt
+- [ ] Tastatur funktioniert
+- [ ] Touch funktioniert
+- [ ] Scroll funktioniert
+
 ### Maschine
 
 - [ ] OC-Kabel korrekt angeschlossen
@@ -342,100 +350,105 @@ Erst wenn dieser Aufbau funktioniert, weitere Controller hinzufügen.
 - [ ] Steuerbefehle funktionieren
 - [ ] Controller bleibt online
 
-### Zentrale
-
-- [ ] Client erscheint in DEVICES
-- [ ] Online/Offline-Status funktioniert
-- [ ] Ping funktioniert
-- [ ] Rescan funktioniert
-- [ ] Remote-Eingaben funktionieren
-
 ---
 
-# 12. Fehlerdiagnose
+# 11. Fehlerdiagnose
 
-## Client wird nicht gefunden
+## Controller wird nicht gefunden
 
 1. Wireless Network Card prüfen.
-2. Prüfen, ob beide Computer im Funkbereich sind.
+2. Funkbereich prüfen.
 3. Port `4242` prüfen.
 4. `BULDACITY/2` prüfen.
 5. Client neu starten.
-6. Server-Rescan ausführen.
+6. `R` auf der Zentrale ausführen.
 
-## Maschine wird nicht erkannt
+## Controller ist online, aber Oberfläche bleibt leer
 
-1. OC-Kabel prüfen.
-2. Adapter prüfen.
-3. richtige Komponente für den verwendeten Mod prüfen.
-4. Controller neu starten.
-5. lokale Controller-Ausgabe prüfen.
+1. Controller muss eine GPU besitzen.
+2. Screen muss funktionieren.
+3. `BuldacityNetworkClient.lua` muss aktuell sein.
+4. Prüfen, ob der Controller `SCREEN_REQUEST` empfängt.
+5. Controller neu starten.
+6. REMOTE erneut öffnen.
+
+## Oberfläche wird angezeigt, aber Eingaben funktionieren nicht
+
+1. richtigen Controller auswählen.
+2. REMOTE öffnen.
+3. Netzwerkverbindung prüfen.
+4. `BuldacityNetworkClient.lua` prüfen.
+5. lokale Controller-Events prüfen.
 
 ## Funk funktioniert, aber Maschine nicht
 
 Dann ist das Netzwerk wahrscheinlich in Ordnung. Die lokale OC-Maschinenverbindung muss separat geprüft werden.
 
-## Maschine funktioniert, aber Server sieht Controller nicht
-
-Dann zuerst die Wireless-Verbindung und den BULDACITY-Client prüfen.
-
 ---
 
-# 13. Aufbauprinzip
-
-Die wichtigste Regel ist:
+# 12. Aufbauprinzip
 
 ```text
-                    BULDACITY
-                       │
-                ┌──────▼──────┐
-                │ TIER-3      │
-                │ ZENTRALE    │
-                └──────┬──────┘
-                       │
-                    WIRELESS
-                       │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-    Controller     Controller     Controller
-        │              │              │
-     OC-Kabel       OC-Kabel       OC-Kabel
-        │              │              │
-     Maschine       Maschine       Maschine
+                    BULDACITY OS
+                         │
+                  ┌──────▼──────┐
+                  │ TIER-3      │
+                  │ ZENTRALE    │
+                  │ Desktop     │
+                  └──────┬──────┘
+                         │
+                      WIRELESS
+                         │
+        ┌────────────────┼────────────────┐
+        ▼                ▼                ▼
+    Controller       Controller       Controller
+    Reactor          Diesel           AE2
+        │                │                │
+     OC-Kabel         OC-Kabel         OC-Kabel
+        │                │                │
+     Maschine         Maschine         Lager
 ```
 
-**Funk = BULDACITY-Netzwerk.**
+**Funk = BULDACITY-Netzwerk + Remote-Oberfläche.**
 
 **OC-Kabel = lokale Maschinen-/Komponentenverbindung.**
 
-Damit bleibt der Aufbau sauber, erweiterbar und leicht zu testen.
+---
+
+# 13. Wichtige aktuelle Dateistruktur
+
+```text
+BuldacityOS_Tier3.lua          <- zentrale Desktop-Oberfläche
+BuldacityWireless.lua          <- gemeinsamer Netzwerktransport
+BuldacityNetworkClient.lua     <- Client + Screen-Streaming
+BuldacityNetworkLauncher.lua   <- Netzwerkstart
+BuldacityControllerLauncher.lua<- Controller-Auswahl
+BuldacityNetworkStatus.lua     <- Diagnose
+BuldacityNetworkInstall.lua    <- Installation/Prüfung
+```
+
+Der alte `BuldacityDesktop_Tier3.lua` wird nicht mehr benötigt und wurde entfernt, damit keine doppelte Tier-3-Desktop-Implementierung vorhanden ist.
 
 ---
 
-# 14. Sicherheit / Zugriff
-
-Dieses Setup verwendet bewusst **keine Whitelist**. Jeder kompatible BULDACITY-Client kann sich grundsätzlich am Netzwerk melden.
-
-Das bedeutet: In einer gemeinsam genutzten oder nicht vertrauenswürdigen Welt sollte die Steuerung nicht ungeschützt erreichbar sein. Für eine private Testwelt ist der offene Aufbau dagegen einfach und praktisch.
-
----
-
-# 15. Empfohlene Reihenfolge beim echten Aufbau
+# 14. Empfohlene Installation
 
 1. Minecraft + Forge installieren.
 2. OpenComputers installieren.
 3. Tier-3-Zentrale aufbauen.
-4. Screen/GPU/Keyboard anschließen.
+4. GPU/Screen/Keyboard anschließen.
 5. Wireless Network Card einsetzen.
-6. `BuldacityWireless.lua` installieren.
-7. `BuldacityDesktop_Tier3.lua` starten.
+6. Buldacity-Dateien installieren.
+7. `BuldacityOS_Tier3.lua` starten.
 8. Einen einzigen Test-Controller aufbauen.
 9. Wireless Network Card einsetzen.
 10. OC-Kabel zum Maschinen-Adapter verlegen.
-11. `BuldacityNetworkClient.lua` starten.
+11. `BuldacityControllerLauncher.lua` starten.
 12. Controller an der Zentrale prüfen.
-13. Maschine testen.
-14. Erst danach weitere Controller hinzufügen.
-15. Am Ende alle Bereiche der Anlage verbinden.
+13. `DEVICES` öffnen.
+14. Controller auswählen.
+15. `REMOTE` öffnen und Live-Oberfläche prüfen.
+16. Maschine testen.
+17. Erst danach weitere Controller hinzufügen.
 
-So lässt sich jeder Abschnitt einzeln testen und ein Fehler kann eindeutig auf **Funknetz**, **OC-Kabel/Adapter** oder **Maschinen-Controller** eingegrenzt werden.
+So kann jeder Abschnitt einzeln geprüft werden und Fehler lassen sich eindeutig auf Funknetz, Remote-Übertragung oder lokale Maschinen-/Komponentenverbindung eingrenzen.
