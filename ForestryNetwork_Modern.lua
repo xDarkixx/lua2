@@ -1,8 +1,16 @@
--- Buldacity Forestry Network Controller
-local ok,net=pcall(require,"Network")
-if ok and net and net.startClient then pcall(net.startClient,"Forestry",{controller="Forestry_Modern.lua"}) end
-local component=require("component")
-local event=require("event")
-local term=require("term")
-local function scan() local r={};for addr,typ in component.list() do local s=string.lower(typ);if s:find("forestry") or s:find("bee") or s:find("apiary") or s:find("farm") or s:find("network") then r[#r+1]={addr,typ} end end;return r end
-while true do term.clear();term.setCursor(1,1);print("=== BULDACITY // FORESTRY NETWORK ===");print("Live OpenComputers component discovery");print("");local r=scan();print("Detected components: "..#r);for i,v in ipairs(r) do print(string.format("%02d %-24s %s",i,v[2],v[1])) end;print("");print("R = rescan | Q = quit");local _,_,c=event.pull("key_down");if c==16 or c==81 or c==113 then break end end
+-- ForestryNetwork_Modern.lua
+-- BULDACITY/2 network client wrapper for Forestry_Modern.lua.
+-- The Modern controller remains unchanged; this file only adds the shared client bridge.
+
+local Network=require("Network")
+local ok,mode=Network.startClient("Forestry // Command Center",{
+  controller="Forestry_Modern.lua",
+  mod="Forestry",
+  version="4.2.16.64",
+  network=true
+})
+if not ok then
+  io.stderr:write("BULDACITY Network unavailable: "..tostring(mode).."\n")
+end
+
+dofile("/Forestry_Modern.lua")
