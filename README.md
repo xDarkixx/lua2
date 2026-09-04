@@ -7,24 +7,54 @@ OpenComputers-Lua-Programme für Minecraft 1.7.10 und die jeweils im Script ange
 Die Repository enthält bewusst zwei Controller-Stile:
 
 - **Normal** – die klassischen Controller-Dateien bleiben erhalten.
-- **Modern** – die grafisch überarbeiteten `_Modern.lua` Controller bleiben als Desktop-Apps erhalten.
+- **Modern** – die grafisch überarbeiteten `_Modern.lua` Controller bleiben als lokale Desktop-Apps erhalten und werden nicht heimlich verändert.
 - **Big Reactors** – `ReactorBigReactors043A_Touch_Responsive.lua` ist der aktuelle Big-Reactors-Controller für Big Reactors 0.4.3A.
-- **Network-Controller** – die `*_Network_Modern.lua` Programme laufen auf normalen Controller-PCs und stellen die Verbindung zum Tier-3-Hauptrechner her.
+- **Network-Controller** – die vorhandenen `*Network*.lua` Programme laufen auf normalen Tier-3-Controller-PCs und stellen die Verbindung zum zentralen Rechner her.
 
-## Neue Buldacity-Architektur
+## BULDACITY Desktop 5.0
 
-Der Tier-3-Hauptrechner ist jetzt ein echter zentraler Desktop-Hub:
+`BuldacityOS_Tier3.lua` ist der **einzige zentrale BULDACITY-Server**. Zusammen mit `Network.lua` bildet er den Tier-3-Netzwerkkern.
 
-- `BuldacityOS_Tier3.lua` ist der zentrale Desktop und Netzwerk-Hub.
-- `Network.lua` ist die gemeinsame Netzwerkbibliothek für normale Controller-PCs.
-- Die alten separaten `Buldacity*` Netzwerk-Hilfsprogramme werden nicht mehr benötigt.
-- Der Desktop entdeckt Controller automatisch über `BULDACITY/2`.
-- Modern-Controller werden im Desktop als Apps angezeigt.
-- Network-Controller laufen auf den normalen PCs und melden ihren Namen, Controller und Status.
-- Remote-Bildschirm, Tastatur, Touch und Scroll können über den Tier-3-Desktop verwendet werden.
-- Keine Whitelist, keine UUID-Rollenverwaltung und keine separate Access-Control-Datei.
+Der Desktop ist als echter OpenComputers-Arbeitsplatz aufgebaut:
 
-### Netzwerkstandard
+- HOME mit Live-Flotte und Systemlog
+- NETWORK mit Heartbeat-/Link-Monitor
+- DEVICES mit Auswahl der normalen Controller-PCs
+- APPS mit lokaler Modern-App-Bibliothek
+- DISKS mit echten gemounteten Dateisystemen, Label, Kapazität, Belegung, frei und Read-only-Status
+- SYSTEM mit echten Computerwerten und Live-Gauges
+- REMOTE als Live-Remote-PC mit Bildschirmübertragung
+- Tastatur-Weiterleitung inklusive `key_down` und `key_up`
+- Touch- und Scroll-Weiterleitung
+- automatische Controller-Erkennung und Heartbeats
+- einheitliches Desktop-Design mit Panels, Statusfarben und Live-Anzeigen
+
+Die Anzeige ist nicht nur ein einfacher Balken: Speicher- und Systemwerte werden als konkrete Werte mit Einheiten und Status dargestellt; bei Systemmetriken gibt es zusätzlich Live-Gauges.
+
+## Netzwerkarchitektur
+
+Es gibt **nur einen Server**:
+
+```text
+                  ┌──────────────────────────────┐
+                  │ Tier-3 OpenComputers PC      │
+                  │ BuldacityOS_Tier3.lua        │
+                  │ + Network.lua                │
+                  │ CENTRAL BULDACITY SERVER     │
+                  └──────────────┬───────────────┘
+                                 │ BULDACITY/2 :4242
+              ┌──────────────────┼──────────────────┐
+              │                  │                  │
+      ┌───────▼───────┐  ┌──────▼────────┐  ┌──────▼────────┐
+      │ Normal PC     │  │ Normal PC     │  │ Normal PC     │
+      │ AE2 Network   │  │ Mekanism Net  │  │ Reactor Net   │
+      │ Client        │  │ Client        │  │ Client        │
+      └───────────────┘  └───────────────┘  └───────────────┘
+```
+
+Alle Mod-Controller bleiben auf ihren normalen OpenComputers-PCs. Der Tier-3-Desktop sammelt deren Status und kann ihre Bildschirme sowie Eingaben remote bedienen. Es werden **keine zusätzlichen BULDACITY-Server pro Mod** benötigt.
+
+## Netzwerkstandard
 
 - Minecraft `1.7.10`
 - Forge `10.13.4.1614`
@@ -35,10 +65,11 @@ Der Tier-3-Hauptrechner ist jetzt ein echter zentraler Desktop-Hub:
 - normale OpenComputers-PCs als Controller-Clients
 - automatische Discovery und Heartbeat
 - Remote-Screen sowie Tastatur-, Touch- und Scroll-Weiterleitung
+- keine Whitelist und keine UUID-Rollenverwaltung
 
 ## Big Reactors 0.4.3A
 
-`ReactorBigReactors043A_Touch_Responsive.lua` ist der zentrale Big-Reactors-Touch-Controller.
+`ReactorBigReactors043A_Touch_Responsive.lua` ist der aktuelle Big-Reactors-Touch-Controller.
 
 Funktionen:
 
@@ -83,16 +114,22 @@ Beispiele:
 1. Minecraft 1.7.10 mit Forge und OpenComputers starten.
 2. Die benötigten Mod-Komponenten an den jeweiligen OpenComputers-PC anschließen.
 3. Die gewünschten Normal- oder Modern-Controller nach `/home` kopieren.
-4. Auf dem Tier-3-Hauptrechner `BuldacityOS_Tier3.lua` starten.
-5. Auf normalen Controller-PCs den passenden `*_Network_Modern.lua` Controller starten. Dieser verwendet `Network.lua` für BULDACITY/2.
-6. Modern-Controller bleiben normale Desktop-Apps und müssen nicht in den Tier-3-Netzwerkkern eingebaut werden.
-7. Für Big Reactors direkt `ReactorBigReactors043A_Touch_Responsive.lua` starten.
+4. Auf dem zentralen Tier-3-Hauptrechner `BuldacityOS_Tier3.lua` starten.
+5. Auf normalen Controller-PCs den passenden `*Network*.lua` Controller starten. Dieser verwendet `Network.lua` für BULDACITY/2.
+6. Die `_Modern.lua` Dateien bleiben lokale Apps. Der zentrale Desktop zeigt sie in **APPS** an, ohne sie in den Netzwerkkern einzubauen.
+7. Für Big Reactors direkt `ReactorBigReactors043A_Touch_Responsive.lua` starten oder den passenden Network-Wrapper auf einem normalen Controller-PC verwenden.
 
 ## Erster Netzwerktest
 
 Zuerst den Tier-3-Desktop starten und danach einen Network-Controller auf einem normalen PC. Der Client sollte automatisch unter **DEVICES** erscheinen. Anschließend **REMOTE** öffnen und den Controller auswählen.
 
-Die Netzwerkverbindung benötigt nur einen Modem bzw. eine Wireless Network Card auf den beteiligten OpenComputers-PCs. Port `4242` und Protokoll `BULDACITY/2` werden automatisch verwendet.
+Im Remote-Modus wird der echte Zeicheninhalt des Ziel-GPUs übertragen. Eingaben können vom zentralen Bildschirm an den normalen Controller-PC zurückgesendet werden. Damit verhält sich der Desktop für die unterstützten Controller wie eine Remote-Konsole bzw. ein Remote-PC-Arbeitsplatz.
+
+Die Netzwerkverbindung benötigt nur ein Modem bzw. eine Wireless Network Card auf den beteiligten OpenComputers-PCs. Port `4242` und Protokoll `BULDACITY/2` werden automatisch verwendet.
+
+## OpenComputers Speicher
+
+OpenComputers stellt gemountete Dateisysteme über die Filesystem-API bereit. Der Desktop nutzt diese Mounts für die **DISKS**-Ansicht und zeigt reale Speicherinformationen an, statt einen künstlichen Fortschrittsbalken zu simulieren.
 
 ## Dokumentation
 
