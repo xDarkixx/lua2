@@ -1,24 +1,23 @@
-# BULDACITY v9 – Grafiksystem
+# BULDACITY v10 – Grafiksystem
 
 ## Ziel
 
-BULDACITY nutzt die OpenComputers-GPU als gemeinsame grafische Schicht für Zentrale und Mod-Controller.
+BULDACITY nutzt die echte OpenComputers-GPU als gemeinsame grafische Schicht für Zentrale und Mod-Controller.
 
 ## Grafische Bausteine
 
-- farbige Flächen mit `gpu.fill`
+- farbige GPU-Flächen mit `gpu.fill`
 - Vorder-/Hintergrundfarben
 - Panels und Karten
-- horizontale Fortschrittsbalken
-- große mehrzeilige Balken
-- vertikale Balken
+- horizontale und vertikale Balken
 - Status-LEDs
 - Buttons und Touch-Zonen
-- Messanzeigen
+- Gauges
 - Sparklines
 - Live-Diagramme
 - Pixel-Icons
 - Remote-Screen-Darstellung
+- resolution-aware Layouts
 
 ## Gemeinsame Bibliothek
 
@@ -26,7 +25,7 @@ BULDACITY nutzt die OpenComputers-GPU als gemeinsame grafische Schicht für Zent
 /home/BuldacityUI.lua
 ```
 
-Die wichtigsten Funktionen:
+Wichtige Funktionen:
 
 ```text
 UI.panel()
@@ -41,6 +40,33 @@ UI.sparkline()
 UI.graph()
 UI.icon()
 UI.card()
+```
+
+## Desktop-Seiten
+
+Die zentrale BULDACITY-Oberfläche enthält:
+
+```text
+DESKTOP
+APPS
+NETWORK
+DEVICES
+REMOTE
+REACTOR
+```
+
+Die NETWORK-Seite ist speziell für die neue Multi-Modem-Diagnose ausgelegt und zeigt unter anderem:
+
+```text
+Server-Modem-Anzahl
+Wireless-Anzahl
+Signalstärke
+Port 4242
+Modem-Adresse
+Wired/Wireless
+Relay/AP
+Scan-Status
+Client-Modemstatus
 ```
 
 ## Beispiel
@@ -58,7 +84,7 @@ UI.statusLine("BULDACITY GPU ONLINE",UI.C.green)
 
 ## Icons
 
-`UI.icon()` zeichnet kleine Pixel-Symbole direkt mit GPU-Flächen. Unterstützt sind unter anderem:
+`UI.icon()` zeichnet Pixel-Symbole direkt mit GPU-Flächen. Unterstützt sind unter anderem:
 
 ```text
 power / energy
@@ -73,19 +99,23 @@ fluid / tank
 
 ## Maximale Darstellung
 
-Für die größte Oberfläche sollte ein Tier-3-GPU/Screen-System verwendet werden. Die Anwendung fragt die vorhandene Auflösung ab und passt die Oberfläche daran an.
+Für die größte Oberfläche sollte ein Tier-3-GPU/Screen-System verwendet werden. Die Anwendung fragt die vorhandene Auflösung ab und passt das Layout daran an.
 
 Bei kleineren Screens wird die Oberfläche kompakter; die Funktionen bleiben erhalten.
 
 ## Für alle Controller
 
-Die Bibliothek liegt zentral im Repository und kann von jedem Controller geladen werden:
-
 ```lua
 local UI=require("BuldacityUI")
 ```
 
-Der Controller muss `/home` als Arbeitsverzeichnis bzw. als `package.path` verwenden. Die aktuellen BULDACITY-Wrapper setzen dies für den gemeinsamen Netzwerkbetrieb voraus.
+Die Controller müssen `/home` als Arbeitsverzeichnis bzw. als `package.path` verwenden.
+
+## Netzwerk-Diagnose grafisch
+
+Die zentrale UI liest die Netzwerkdaten aus `Network.lua` und stellt echte Hardwarezustände dar. Dazu gehören Modem-Anzahl, Modem-Adressen, Wireless-Status, Signalstärke, Port, Relay/AP und Scan-Stufe.
+
+Damit ist die Anzeige nicht nur eine statische Grafik, sondern eine Darstellung der tatsächlich gemeldeten OpenComputers-Komponenten.
 
 ## Keine falschen Versprechen
 
