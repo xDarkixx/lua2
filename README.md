@@ -12,8 +12,49 @@ BULDACITY verwendet einen zentralen Tier-3-Desktop und normale OpenComputers-Con
 - Port: `4242`
 - Gemeinsames UI-Design: `BuldacityUI.lua`
 - Generisches Dashboard: `BuldacityComponentDashboard.lua`
+- Automatischer Netzwerk-Assistent: `BuldacityNetworkSetup.lua`
 - Autostart: `BuldacityAutoStart.lua`
 - Vollständige Schritt-für-Schritt-Anleitung: `BULDACITY_SCHRITT_FUER_SCHRITT.md`
+
+## Automatischer Netzwerk-Assistent
+
+Der Tier-3-Server führt beim Start automatisch einen kurzen Netzwerkcheck aus. Dadurch muss das Netzwerk nicht mehr von Hand eingerichtet werden.
+
+Der Assistent:
+
+- erkennt alle vorhandenen OpenComputers-`modem`-Komponenten
+- öffnet automatisch Port `4242`
+- setzt die Wireless-Stärke auf `400`, wenn die Hardware dies unterstützt
+- erkennt BULDACITY-Clients automatisch
+- führt Link- und Ping-Tests durch
+- fragt die Komponenten der Clients automatisch ab
+- zeigt Client-Status, Verbindung, WLAN/Wired, Entfernung und Latenz an
+- erkennt bekannte Mod-Komponenten wie AE2, Diesel Generator, Big Reactors, RotaryCraft, IndustrialCraft 2, Mekanism, Thermal Expansion, PneumaticCraft und RFTools
+- startet anschließend automatisch den normalen BULDACITY-Desktop
+
+Es sind keine UUID-Listen oder manuellen Netzwerkadressen erforderlich.
+
+### Startablauf
+
+```text
+Tier-3 Server
+    ↓
+Modem erkennen
+    ↓
+Port 4242 öffnen
+    ↓
+Wireless konfigurieren
+    ↓
+Clients suchen
+    ↓
+PING / LINK prüfen
+    ↓
+Komponenten inventarisieren
+    ↓
+BULDACITY Desktop
+```
+
+Wenn kein Modem vorhanden ist, zeigt der Assistent ausdrücklich `FEHLER: KEIN MODEM` an. Ein echter Minecraft/OpenComputers-Laufzeittest muss anschließend in der Welt durchgeführt werden.
 
 ## Desktop
 
@@ -84,16 +125,17 @@ Aktuelle Controller gibt es unter anderem für:
 1. Minecraft 1.7.10 + Forge installieren.
 2. OpenComputers und benötigte Mods installieren.
 3. Tier-3-Zentrale bauen.
-4. `Network.lua` + `BuldacityOS_Tier3.lua` nach `/home` kopieren.
+4. `Network.lua`, `BuldacityNetworkSetup.lua` und `BuldacityOS_Tier3.lua` nach `/home` kopieren.
 5. Zentrale starten.
 6. Pro Mod einen normalen Controller-PC aufbauen.
 7. `Network.lua` und den passenden Network-Controller nach `/home` kopieren.
 8. Mod-Komponente bzw. Adapter anschließen.
 9. Lokale Modern-GUI testen.
 10. Network-Controller starten.
-11. Zentrale `DEVICES` prüfen.
-12. `REMOTE` testen.
-13. Autostart einrichten.
+11. Die Zentrale führt den automatischen Netzwerkcheck aus.
+12. `DEVICES` prüfen.
+13. `REMOTE` testen.
+14. Autostart einrichten.
 
 ## Schritt-für-Schritt
 
@@ -107,9 +149,10 @@ Weitere Dokumentation:
 - `BULDACITY_MOD_SETUP_ADDONS.md`
 - `COMPONENTS.md`
 - `BULDACITY_AUTOSTART.md`
+- `BuldacityNetworkSetup.lua`
 
 ## Wichtiger Installationsgrundsatz
 
-**Installieren → Anschließen → Scannen → lokale GUI testen → Netzwerk testen → Zentrale prüfen → Autostart aktivieren.**
+**Installieren → Anschließen → automatische Einrichtung → Scannen → lokale GUI testen → Netzwerk testen → Zentrale prüfen → Autostart aktivieren.**
 
 Bei fehlenden Funktionen immer die tatsächlich verfügbaren OpenComputers-Komponenten und Methoden prüfen. Ein Adapter garantiert nicht automatisch eine vollständige Mod-API.
