@@ -8,13 +8,13 @@ local computer=require("computer")
 local UI=require("SGCraftUI")
 local gpu=component.gpu
 local gates={};local selected=1;local page="status";local running=true;local target="";local message="";local log={}
--- IMPORTANT: do not wrap ... inside another function on OC Lua 5.2.
--- Passing the function directly to pcall keeps varargs valid.
-local function safe(o,n,...)
+-- OC compatibility: no Lua vararg syntax is used here.
+-- This avoids the "cannot use ... outside a vararg function" parser error.
+local function safe(o,n,a,b,c,d)
  if not o or type(o[n])~="function" then return nil,"METHOD_UNAVAILABLE" end
- local ok,a,b,c,d=pcall(o[n],...)
- if ok then return a,b,c,d end
- return nil,tostring(a)
+ local ok,r1,r2,r3,r4=pcall(o[n],a,b,c,d)
+ if ok then return r1,r2,r3,r4 end
+ return nil,tostring(r1)
 end
 local function addLog(s)
  log[#log+1]=os.date("%H:%M:%S").." "..tostring(s)
