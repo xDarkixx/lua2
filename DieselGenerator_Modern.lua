@@ -1,6 +1,6 @@
 -- DieselGenerator_Modern.lua
--- BULDACITY NEON HUD / Immersive Engineering Diesel Generator / OpenComputers / MC 1.7.10
--- Robust component discovery: does NOT require ie_diesel_generator to be the OC primary component.
+-- BULDACITY / Immersive Engineering Diesel Generator / OpenComputers / MC 1.7.10
+-- Robust IE component discovery and tank parsing.
 
 local component=require("component")
 local event=require("event")
@@ -34,11 +34,10 @@ local function safe(f,...)
  return nil
 end
 
--- Never use component.ie_diesel_generator here: that syntax asks OpenComputers
--- for the PRIMARY component and crashes when no primary is registered.
 local function discoverGenerator()
  gen=nil
  genAddress=nil
+ -- IE 0.7.x preferred component name for the 1.7.10 diesel generator.
  for address in component.list("ie_diesel_generator",true) do
   genAddress=address
   gen=component.proxy(address)
@@ -118,6 +117,47 @@ local function hit(id,x,y)
  return b and x>=b.x and x<b.x+b.w and y>=b.y and y<b.y+b.h
 end
 
+-- OC/IE versions can expose getTankInfo as either the tank table itself,
+-- a one-element array, or a table containing fluid information.
+local function parseTankInfo(info)
+ amount=0
+ capacity=0
+ fluid="--"
+ if type(info)~="table" then return false end
+
+ local t=info
+ if type(info[1])=="table" and (info.amount==nil and info.capacity==nil) then
+  t=info[1]
+ end
+
+ local a=tonumber(t.amount)
+ local c=tonumber(t.capacity)
+ if a then amount=a end
+ if c then capacity=c end
+
+ local f=t.fluid
+ if type(f)=="table" then
+  amount=tonumber(f.amount) or amount
+  capacity=tonumber(f.capacity) or capacity
+  fluid=tostring(f.name or f.label or f.fluid or "--")
+ elseif f~=nil then
+  fluid=tostring(f)
+ end
+
+ -- Some OC fluid converters put the fluid data directly in the first entry.
+ if capacity<=0 and type(info[1])=="table" then
+  local q=info[1]
+  capacity=tonumber(q.capacity) or capacity
+  amount=tonumber(q.amount) or amount
+  if type(q.fluid)=="table" then
+   amount=tonumber(q.fluid.amount) or amount
+   fluid=tostring(q.fluid.name or q.fluid.label or fluid)
+  end
+ end
+
+ return capacity>0 or amount>0 or fluid~="--"
+end
+
 local function readGenerator()
  if not gen then
   discoverGenerator()
@@ -130,35 +170,25 @@ local function readGenerator()
   end
  end
 
- active=safe(gen.isActive)==true
+ local a=safe(gen.isActive)
+ active=a==true
  local info=safe(gen.getTankInfo)
- local t=type(info)=="table" and (info[1] or info) or nil
+ local found=parseTankInfo(info)
 
- if type(t)=="table" then
-  capacity=tonumber(t.capacity) or 0
-  local f=t.fluid
-  if type(f)=="table" then
-   amount=tonumber(f.amount) or 0
-   fluid=tostring(f.name or "--")
-  else
-   amount=0
-   fluid=tostring(f or "--")
-  end
- else
-  amount=0
-  capacity=0
-  fluid="--"
+ if not found then
+  msg="GENERATOR FOUND - TANK DATA EMPTY"
  end
 
  if mode=="AUTO" and capacity>0 then
   local p=amount/capacity*100
   if p<=10 and enabled then
-   local ok=safe(gen.setEnabled,false)
-   if ok~=nil then enabled=false end
+   -- setEnabled returns no Lua values on successful IE callbacks.
+   safe(gen.setEnabled,false)
+   enabled=false
    msg="AUTO: LOW FUEL"
   elseif p>=20 and not enabled then
-   local ok=safe(gen.setEnabled,true)
-   if ok~=nil then enabled=true end
+   safe(gen.setEnabled,true)
+   enabled=true
    msg="AUTO: FUEL OK"
   end
  end
@@ -168,17 +198,17 @@ local function setGenerator(v)
  if not gen then
   discoverGenerator()
   if not gen then
-   msg="NO DIESEL GENERATOR"
+   msg="NO DIESEL GENERATOR - CHECK ADAPTER"
    return
   end
  end
  mode="MANUAL"
- local result=safe(gen.setEnabled,v)
- enabled=v
- if result==nil then
-  msg="GENERATOR COMMAND FAILED"
- else
+ local ok=pcall(function() gen.setEnabled(v) end)
+ if ok then
+  enabled=v
   msg=v and "GENERATOR ENABLED" or "GENERATOR DISABLED"
+ else
+  msg="GENERATOR COMMAND FAILED"
  end
 end
 
@@ -223,8 +253,9 @@ local function drawHome()
 
  if not gen then
   txt(6,y+3,"NO DIESEL GENERATOR LINK",C.red,C.panel)
-  txt(6,y+5,"Attach the IE OpenComputers",C.grey,C.panel)
-  txt(6,y+6,"compatible component and SCAN.",C.grey,C.panel)
+  txt(6,y+5,"Place an OC Adapter on the IE",C.grey,C.panel)
+  txt(6,y+6,"generator redstone control port.",C.grey,C.panel)
+  txt(6,y+8,"Then press SCAN.",C.yellow,C.panel)
  else
   led(6,y+3,active,C.green,active and "GENERATOR ACTIVE" or "GENERATOR STOPPED")
   led(6,y+5,mode=="AUTO",C.purple,mode=="AUTO" and "AUTO CONTROL" or "MANUAL CONTROL")
@@ -249,8 +280,8 @@ local function drawHome()
   bar(x+4,y+12,pw-8,p,C.orange)
   txt(x+4,y+14,"COMPONENT",C.grey,C.panel)
   txt(x+22,y+14,genAddress and fit(genAddress,math.max(1,pw-25)) or "NOT FOUND",genAddress and C.cyan or C.red,C.panel)
-  txt(x+4,y+16,"HUD",C.grey,C.panel)
-  txt(x+22,y+16,(W>=150 and "ULTRA 160x50" or W>=75 and "WIDE" or "COMPACT"),C.cyan,C.panel)
+  txt(x+4,y+16,"API",C.grey,C.panel)
+  txt(x+22,y+16,gen and "setEnabled / isActive / getTankInfo" or "NOT CONNECTED",gen and C.cyan or C.red,C.panel)
  end
  footer()
 end
@@ -275,7 +306,7 @@ while run do
   elseif hit("auto",x,y) then mode="AUTO";msg="AUTOMATIC CONTROL ON"
   elseif hit("on",x,y) then setGenerator(true)
   elseif hit("off",x,y) then setGenerator(false)
-  elseif hit("scan",x,y) then discoverGenerator();readGenerator();msg=gen and "DIESEL COMPONENT FOUND" or "NO ie_diesel_generator FOUND"
+  elseif hit("scan",x,y) then discoverGenerator();readGenerator();msg=gen and "DIESEL COMPONENT FOUND" or "NO ie_diesel_generator - CHECK ADAPTER"
   elseif hit("exit",x,y) then run=false end
   readGenerator()
   draw()
@@ -285,7 +316,7 @@ while run do
   elseif c==string.byte("a") or c==string.byte("A") then mode="AUTO";msg="AUTOMATIC CONTROL ON"
   elseif c==string.byte("m") or c==string.byte("M") then setGenerator(true)
   elseif c==string.byte("o") or c==string.byte("O") then setGenerator(false)
-  elseif c==string.byte("s") or c==string.byte("S") then discoverGenerator();msg=gen and "DIESEL COMPONENT FOUND" or "NO ie_diesel_generator FOUND"
+  elseif c==string.byte("s") or c==string.byte("S") then discoverGenerator();msg=gen and "DIESEL COMPONENT FOUND" or "NO ie_diesel_generator - CHECK ADAPTER"
   end
   readGenerator()
   draw()
