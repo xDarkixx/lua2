@@ -57,11 +57,13 @@ end
 function UI.led(x,y,on,accent,label)
  accent=accent or UI.C.green;UI.rect(x,y,3,1,on and accent or UI.C.off);UI.text(x+4,y,UI.fit(label or (on and "ONLINE" or "OFFLINE"),UI.W-x-4),on and accent or UI.C.muted,UI.C.panel)
 end
+-- Compatibility alias used by older BULDACITY pages.
+-- UI.led is the canonical implementation; statusLed keeps existing pages working.
+UI.statusLed=UI.led
 function UI.gauge(x,y,w,label,value,min,max,accent,unit)
  accent=accent or UI.C.cyan;min=tonumber(min) or 0;max=tonumber(max) or 100;value=tonumber(value) or 0;local p=max>min and (value-min)/(max-min)*100 or 0;UI.text(x,y,label,UI.C.muted,UI.C.panel);UI.text(x+w-10,y,string.format("%.1f",value)..tostring(unit or ""),accent,UI.C.panel);UI.bar(x,y+1,w,p,accent,false)
 end
 function UI.ring(x,y,r,p,accent)
- -- Character-cell approximation of a circular gauge, useful when pixel shaders are unavailable.
  accent=accent or UI.C.cyan;r=math.max(2,math.floor(r));p=math.max(0,math.min(100,p or 0));local seg=math.max(1,math.floor(12*p/100));local glyphs={"◴","◷","◶","◵"};local g=glyphs[(seg%4)+1];UI.text(x,y,g,accent,UI.C.panel);UI.text(x+2,y,string.format("%3.0f%%",p),accent,UI.C.panel)
 end
 function UI.sparkline(x,y,w,h,values,accent)
