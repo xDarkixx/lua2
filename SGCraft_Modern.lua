@@ -9,7 +9,6 @@ local UI=require("SGCraftUI")
 local gpu=component.gpu
 local gates={};local selected=1;local page="status";local running=true;local target="";local message="";local log={}
 -- OC compatibility: no Lua vararg syntax is used here.
--- This avoids the "cannot use ... outside a vararg function" parser error.
 local function safe(o,n,a,b,c,d)
  if not o or type(o[n])~="function" then return nil,"METHOD_UNAVAILABLE" end
  local ok,r1,r2,r3,r4=pcall(o[n],a,b,c,d)
@@ -33,10 +32,10 @@ local function readGate(g)
  local localAddr=safe(g.proxy,"localAddress")
  local remote=safe(g.proxy,"remoteAddress")
  local energy=safe(g.proxy,"energyAvailable") or 0
- local iris=safe(g.proxy,"irisState") or "Offline"
+ local irisState=safe(g.proxy,"irisState") or "Offline"
  local maxEnergy=100000
  local pct=math.max(0,math.min(100,(tonumber(energy) or 0)/maxEnergy*100))
- return {address=g.address,state=s or "Unknown",chevrons=tonumber(ch) or 0,direction=dir or "-",local=localAddr or "-",remote=remote or "-",energy=energy,iris=iris,energyPct=pct}
+ return {address=g.address,state=s or "Unknown",chevrons=tonumber(ch) or 0,direction=dir or "-",localAddress=localAddr or "-",remote=remote or "-",energy=energy,iris=irisState,energyPct=pct}
 end
 local function dial()
  local g=selectedGate();if not g or target=="" then addLog("DIAL: gate/target missing");return end
