@@ -8,9 +8,11 @@ local computer=require("computer")
 local UI=require("SGCraftUI")
 local gpu=component.gpu
 local gates={};local selected=1;local page="status";local running=true;local target="";local message="";local log={}
+-- IMPORTANT: do not wrap ... inside another function on OC Lua 5.2.
+-- Passing the function directly to pcall keeps varargs valid.
 local function safe(o,n,...)
  if not o or type(o[n])~="function" then return nil,"METHOD_UNAVAILABLE" end
- local ok,a,b,c,d=pcall(function() return o[n](...) end)
+ local ok,a,b,c,d=pcall(o[n],...)
  if ok then return a,b,c,d end
  return nil,tostring(a)
 end
@@ -89,8 +91,7 @@ while running do
   elseif ch and ch>=32 and ch<=126 then if page=="dial" then target=target..string.char(ch):upper() elseif page=="link" then message=message..string.char(ch) end end
   draw()
  elseif ev=="touch" then
-  local x,y=a,b
-  local handled=false
+  local x,y=a,b;local handled=false
   for id in pairs(UI.buttons) do
    if UI.hit(id,x,y) then
     handled=true
