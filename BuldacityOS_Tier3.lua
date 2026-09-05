@@ -9,6 +9,7 @@ local filesystem=require("filesystem")
 local HOME="/home/"
 local desktop=HOME.."BuldacityDesktop.lua"
 local componentServer=HOME.."BuldacityComponentServer.lua"
+local networkSetup=HOME.."BuldacityNetworkSetup.lua"
 if not filesystem.exists(desktop) or filesystem.isDirectory(desktop) then
   error("BULDACITY OS: /home/BuldacityDesktop.lua not found")
 end
@@ -24,6 +25,14 @@ package.path=HOME.."?.lua;"..HOME.."?/init.lua;"..(package.path or "")
 if filesystem.exists(componentServer) and not filesystem.isDirectory(componentServer) then
   local ok,err=pcall(dofile,componentServer)
   if not ok then io.stderr:write("BULDACITY COMPONENT SERVER failed: "..tostring(err).."\n") end
+end
+
+-- Automatic network setup: opens/configures modems, discovers clients,
+-- checks the BULDACITY/2 link and inventories remote components before the
+-- normal desktop starts. The wizard is deliberately short and non-interactive.
+if filesystem.exists(networkSetup) and not filesystem.isDirectory(networkSetup) then
+  local ok,err=pcall(dofile,networkSetup)
+  if not ok then io.stderr:write("BULDACITY NETWORK SETUP failed: "..tostring(err).."\n") end
 end
 
 local ok,err=pcall(dofile,desktop)
