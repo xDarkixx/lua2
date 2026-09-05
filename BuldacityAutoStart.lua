@@ -49,8 +49,8 @@ computer.beep(880,0.05)
 computer.pullSignal(1)
 local role,client=readConfig()
 if role=="SERVER" then
- -- The Tier-3 server inventories its own components and polls every client.
- start("BuldacityComponentServer.lua")
+ -- BuldacityOS_Tier3 starts the component service and the automatic network
+ -- setup wizard itself. Starting the component service twice is avoided here.
  start("BuldacityOS_Tier3.lua")
 elseif role=="CLIENT" then
  -- Every client runs the component agent before its mod controller.
