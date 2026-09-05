@@ -1,4 +1,4 @@
-# BULDACITY v10 – Grafiksystem
+# BULDACITY v10.2 – Grafiksystem
 
 ## Ziel
 
@@ -6,18 +6,19 @@ BULDACITY nutzt die echte OpenComputers-GPU als gemeinsame grafische Schicht fü
 
 ## Grafische Bausteine
 
-- farbige GPU-Flächen mit `gpu.fill`
+- GPU-Flächen mit `gpu.fill`
 - Vorder-/Hintergrundfarben
 - Panels und Karten
 - horizontale und vertikale Balken
-- Status-LEDs
+- Status-LEDs und Badges
 - Buttons und Touch-Zonen
 - Gauges
 - Sparklines
 - Live-Diagramme
 - Pixel-Icons
+- klickbare Client-/Controller-Zeilen
 - Remote-Screen-Darstellung
-- resolution-aware Layouts
+- auflösungsgerechte Layouts
 
 ## Gemeinsame Bibliothek
 
@@ -35,6 +36,7 @@ UI.bar2()
 UI.vbar()
 UI.gauge()
 UI.led()
+UI.statusLed()
 UI.badge()
 UI.sparkline()
 UI.graph()
@@ -42,9 +44,9 @@ UI.icon()
 UI.card()
 ```
 
-## Desktop-Seiten
+`UI.statusLed` ist als kompatibler Alias für die LED-Funktion vorhanden.
 
-Die zentrale BULDACITY-Oberfläche enthält:
+## Desktop-Seiten v10.2
 
 ```text
 DESKTOP
@@ -55,19 +57,47 @@ REMOTE
 REACTOR
 ```
 
-Die NETWORK-Seite ist speziell für die neue Multi-Modem-Diagnose ausgelegt und zeigt unter anderem:
+Die Desktop-Oberfläche verwendet echte Button-/Touch-Zonen für Clients und Controller.
+
+Beispiel-Navigation:
+
+```text
+DESKTOP → Client anklicken → DEVICES
+APPS → Controller anklicken → REMOTE
+DEVICES → Client anklicken → Auswahl
+REMOTE → REQUEST SCREEN
+```
+
+Auch Component-Einträge werden als UI-Zonen dargestellt.
+
+## Netzwerk grafisch
+
+Die NETWORK-Seite zeigt reale, von `Network.lua` gemeldete Zustände:
 
 ```text
 Server-Modem-Anzahl
 Wireless-Anzahl
+Client-Anzahl
 Signalstärke
 Port 4242
 Modem-Adresse
 Wired/Wireless
 Relay/AP
 Scan-Status
-Client-Modemstatus
+Latency / PING-PONG
 ```
+
+## Remote-Screen
+
+Die zentrale Oberfläche kann einen Client-Screen über `SCREEN_REQUEST` anfordern. Die Darstellung basiert auf den übertragenen:
+
+```text
+SCREEN_BEGIN
+SCREEN_ROW
+SCREEN_END
+```
+
+Dafür benötigt der Client GPU + Screen.
 
 ## Beispiel
 
@@ -97,9 +127,9 @@ printer
 fluid / tank
 ```
 
-## Maximale Darstellung
+## Auflösung
 
-Für die größte Oberfläche sollte ein Tier-3-GPU/Screen-System verwendet werden. Die Anwendung fragt die vorhandene Auflösung ab und passt das Layout daran an.
+Für die größte Oberfläche sollte ein Tier-3-GPU/Screen-System verwendet werden. Die Anwendung liest die vorhandene Auflösung und passt das Layout daran an.
 
 Bei kleineren Screens wird die Oberfläche kompakter; die Funktionen bleiben erhalten.
 
@@ -109,14 +139,8 @@ Bei kleineren Screens wird die Oberfläche kompakter; die Funktionen bleiben erh
 local UI=require("BuldacityUI")
 ```
 
-Die Controller müssen `/home` als Arbeitsverzeichnis bzw. als `package.path` verwenden.
-
-## Netzwerk-Diagnose grafisch
-
-Die zentrale UI liest die Netzwerkdaten aus `Network.lua` und stellt echte Hardwarezustände dar. Dazu gehören Modem-Anzahl, Modem-Adressen, Wireless-Status, Signalstärke, Port, Relay/AP und Scan-Stufe.
-
-Damit ist die Anzeige nicht nur eine statische Grafik, sondern eine Darstellung der tatsächlich gemeldeten OpenComputers-Komponenten.
+Die Controller verwenden `/home` als Arbeitsverzeichnis bzw. Paketpfad.
 
 ## Keine falschen Versprechen
 
-OpenComputers ist eine Zeichen-/GPU-Umgebung. BULDACITY simuliert deshalb Fenster, Karten, Anzeigen und Icons mit den verfügbaren GPU-Operationen. Eine moderne Pixel-Grafik-Engine oder Shader-Pipeline wird nicht vorausgesetzt.
+OpenComputers ist eine Zeichen-/GPU-Umgebung. BULDACITY simuliert Fenster, Karten, Anzeigen und Icons mit den verfügbaren GPU-Operationen. Eine moderne Shader- oder 3D-Grafikengine wird nicht vorausgesetzt.
