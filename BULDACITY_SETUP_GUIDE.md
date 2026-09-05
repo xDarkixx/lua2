@@ -1,15 +1,16 @@
-# BULDACITY v10 – komplette Setup-Anleitung
+# BULDACITY v10.2 – komplette Setup-Anleitung
 
-Diese Anleitung beschreibt den aktuellen Stand von `xDarkixx/lua2` für Minecraft 1.7.10 + Forge + OpenComputers.
+Aktueller Stand für Minecraft 1.7.10 + Forge 10.13.4.1614 + OpenComputers.
 
 ## 1. Voraussetzungen
 
 - Minecraft `1.7.10`
 - Forge `10.13.4.1614`
-- OpenComputers für Minecraft 1.7.10
-- benötigte Mod-Versionen
-- Network Card/Wireless Network Card für Netzwerkbetrieb
-- Tier-3 GPU + Screen für maximale Grafik
+- OpenComputers für 1.7.10
+- Tier-3-System für die Zentrale
+- GPU + Screen + Keyboard für die grafische Oberfläche
+- mindestens eine echte OpenComputers `modem`-Komponente für Netzwerkbetrieb
+- passende Mod und OC-Adapter/Komponente für den jeweiligen Controller
 
 ## 2. Zentrale
 
@@ -21,7 +22,7 @@ Tier-3 Computer
 ├── Tier-3 GPU
 ├── Screen
 ├── Keyboard
-└── Netzwerkkomponente
+└── Modem / Wireless-Modem
 ```
 
 Nach `/home` kopieren:
@@ -46,19 +47,23 @@ dofile("/home/BuldacityOS_Tier3.lua")
 
 ## 3. Grafik
 
-`BuldacityUI.lua` ist die gemeinsame GPU-Schicht für Desktop und Controller.
+`BuldacityUI.lua` stellt Panels, Karten, Buttons, Balken, LEDs, Gauges, Diagramme, Sparklines, Icons und Touch-Zonen bereit.
 
-Sie stellt Panels, Karten, Buttons, Balken, LEDs, Gauges, Diagramme, Sparklines, Icons und Touch-Zonen bereit.
-
-## 4. Controller-PC
-
-Für jeden Mod einen eigenen OC-PC verwenden:
+Die Desktop-Version `v10.2` enthält:
 
 ```text
-CPU + RAM + Speicher + Netzwerkkomponente
+DESKTOP / APPS / NETWORK / DEVICES / REMOTE / REACTOR
 ```
 
-Optional für eine lokale GUI:
+## 4. Client-PC
+
+Für jeden Mod kann ein eigener OC-PC verwendet werden:
+
+```text
+CPU + RAM + Speicher + Modem
+```
+
+Optional:
 
 ```text
 GPU + Screen + Keyboard
@@ -74,7 +79,7 @@ BuldacityComponentAgent.lua
 <Mod>_Modern.lua
 ```
 
-## 5. Component prüfen
+## 5. Hardware prüfen
 
 ```lua
 local component=require("component")
@@ -83,25 +88,20 @@ for address,typ in component.list() do
 end
 ```
 
-Für BULDACITY-Netzwerk muss mindestens eine `modem`-Komponente vorhanden sein.
+BULDACITY sucht Netzwerkhardware ausdrücklich mit:
 
-## 6. Mod-Komponente
-
-Direkt:
-
-```text
-Computer → Mod-Komponente
+```lua
+component.list("modem", true)
 ```
 
-Oder über Adapter/Kabel:
+Wenn kein `modem` erscheint, kann die Maschine nicht am BULDACITY-Netzwerk teilnehmen.
+
+## 6. Netzwerk
 
 ```text
-Computer → OC-Kabel → Adapter → Mod-Block
+Protokoll: BULDACITY/2
+Port:      4242
 ```
-
-Erst lokal prüfen, danach Netzwerk aktivieren.
-
-## 7. Netzwerk
 
 Zentrale:
 
@@ -115,24 +115,33 @@ Client:
 dofile("/home/<Mod>Network_Modern.lua")
 ```
 
-Parameter:
+## 7. Discovery / Handshake
+
+Die aktuelle `Network.lua` registriert beim Client zuerst den Listener und sendet danach HELLO.
 
 ```text
-BULDACITY/2
-Port 4242
+SERVER_HELLO
+ ↓
+HELLO
+ ↓
+LINK_ACK
+ ↓
+LINK_CONFIRM
+ ↓
+PING
+ ↓
+PONG
+ ↓
+HEARTBEAT
+ ↓
+COMPONENT_REQUEST
+ ↓
+COMPONENT_DATA
 ```
 
-## 8. Netzwerk-Hardware
+HELLO und HEARTBEAT werden regelmäßig wiederholt. Dadurch können neu gestartete Clients später ebenfalls gefunden werden.
 
-Die aktuelle `Network.lua` erkennt alle `modem`-Komponenten mit:
-
-```lua
-component.list("modem", true)
-```
-
-Jedes gefundene Modem wird geprüft und für den Netzwerkbetrieb geöffnet. Wireless-fähige Modems werden über `getStrength/setStrength` erkannt.
-
-## 9. Zentrale SCAN
+## 8. SCAN und klickbare Geräte
 
 Auf der Zentrale:
 
@@ -140,37 +149,40 @@ Auf der Zentrale:
 DESKTOP → SCAN
 ```
 
-Die NETWORK-Seite zeigt:
-
-```text
-Server-Modems
-Wireless-Modems
-Signalstärke
-Port 4242
-Modem-Adresse
-Relay/AP
-Scan-Status
-```
-
-## 10. Client finden
-
 Danach:
 
 ```text
-DEVICES
+DESKTOP → Client anklicken → DEVICES
+DEVICES → Client anklicken → auswählen
+APPS → Controller anklicken → REMOTE
+REMOTE → REQUEST SCREEN
 ```
 
-Der Client sollte mit Status, Netzwerktyp, Modem-Anzahl und Component-Anzahl auftauchen.
+Die Client-Zeilen sind in Desktop v10.2 echte Touch/Button-Zonen.
 
-## 11. Component Explorer
+## 9. Component-System
 
-```lua
-dofile("/home/BuldacityComponentDashboard.lua")
+Zentrale:
+
+```text
+/home/BuldacityComponentServer.lua
 ```
 
-Der Component Agent meldet Component-Typen und Adressen an die Zentrale.
+Client:
 
-## 12. Wireless
+```text
+/home/BuldacityComponentAgent.lua
+```
+
+Der Agent meldet Component-Typen, Adressen und Modemdiagnose an die Zentrale.
+
+Log:
+
+```text
+/home/BuldacityComponents.log
+```
+
+## 10. Wireless
 
 Direkt:
 
@@ -178,25 +190,27 @@ Direkt:
 ZENTRALE ))) ((( CLIENT
 ```
 
-oder:
+Über Relay/AP:
 
 ```text
 ZENTRALE ── Kabel ── RELAY/AP ))) ((( CLIENT
 ```
 
-Prüfen:
+Die Software verarbeitet alle gefundenen Modems und liest bei Wireless-Hardware die Signalstärke aus.
+
+Test:
 
 ```lua
 dofile("/home/BuldacityWirelessCheck_Modern.lua")
 ```
 
-## 13. Netzwerkdiagnose
+## 11. Netzwerkdiagnose
 
 ```lua
 dofile("/home/BuldacityNetworkTest.lua")
 ```
 
-Der Netzwerkdienst prüft bzw. protokolliert:
+Geprüft bzw. angezeigt werden unter anderem:
 
 ```text
 MODEM
@@ -215,18 +229,24 @@ DISTANCE
 LATENCY
 ```
 
-## 14. Remote-PC
+## 12. Remote-PC
 
 1. Client in `DEVICES` auswählen.
 2. `REMOTE` öffnen.
-3. `REQUEST SCREEN` ausführen.
+3. `REQUEST SCREEN` senden.
 4. Client benötigt GPU + Screen.
 
-Die Übertragung verwendet Bildschirmzeilen statt einer externen Grafik-Engine.
+Übertragen werden Bildschirmdaten über:
 
-## 15. Mod-Controller
+```text
+SCREEN_BEGIN
+SCREEN_ROW
+SCREEN_END
+```
 
-Das Repo enthält Controller für unter anderem:
+## 13. Mod-Controller
+
+Enthalten sind unter anderem Controller für:
 
 ```text
 3D Printer
@@ -240,20 +260,18 @@ Gendustry
 Immersive Engineering
 Immersive Integration
 Immersive Railroading
-IndustrialCraft 2
-Logistics Pipes
+IndustrialCraft2
+LogisticsPipes
 Mekanism
 PneumaticCraft
 ProjectE
 RFTools
 RotaryCraft
 SGCraft
-Thermal Expansion
+ThermalExpansion
 ```
 
-## 16. Autostart
-
-Zentrale:
+## 14. Autostart
 
 ```text
 /home/BuldacityAutoStart.lua
@@ -261,29 +279,22 @@ Zentrale:
 /home/buldacity-role.cfg
 ```
 
+Server:
+
 ```text
 ROLE=SERVER
 ```
 
-Client:
+Client-Beispiel:
 
 ```text
 ROLE=CLIENT
 CLIENT=BigReactors
 ```
 
-## 17. Fehlerbehebung
+Der Autostart lädt die Dateien aus `/home` und startet auf Clients zuerst den Component Agent und anschließend den Controller.
 
-### Kein Modem
-
-```lua
-local component=require("component")
-for address,typ in component.list() do print(address,typ) end
-```
-
-Wenn kein `modem` auftaucht: Netzwerkhardware prüfen.
-
-### Client nicht sichtbar
+## 15. Fehlerbehebung: kein Client
 
 ```text
 1. Client läuft
@@ -291,95 +302,51 @@ Wenn kein `modem` auftaucht: Netzwerkhardware prüfen.
 3. Network.lua vorhanden
 4. ComponentAgent vorhanden
 5. Network-Wrapper läuft
-6. Port 4242 offen
-7. Wireless-Signal > 0
+6. Port 4242 geöffnet
+7. Wireless-Signal > 0 bei Wireless
 8. Relay/AP prüfen
 9. Zentrale SCAN
-10. NetworkTest
+10. NetworkTest starten
 ```
 
-### Wireless nicht erreichbar
+Wenn `NETWORK → SERVER MODEMS` `0` zeigt, zuerst die Hardware der Zentrale prüfen.
+
+## 16. Fehlerbehebung: kein Wireless
 
 ```text
-Wireless-Hardware vorhanden?
+Wireless-Modem vorhanden?
 Signalstärke > 0?
-Port 4242 geöffnet?
-Entfernung innerhalb der Reichweite?
+Port 4242 offen?
+Reichweite ausreichend?
 Relay/AP korrekt?
 ```
 
-### Remote leer
+## 17. Fehlerbehebung: Remote leer
 
 ```text
-Client online
+Client ONLINE
 GPU vorhanden
 Screen vorhanden
 Network-Wrapper läuft
 REQUEST SCREEN ausführen
 ```
 
-## 18. Logs
+## 18. Abschlusscheck
 
-Die Component-Diagnose schreibt:
-
-```text
-/home/BuldacityComponents.log
-```
-
-## 19. Vollständiger Ablauf
-
-```text
-Minecraft 1.7.10
- ↓
-Forge
- ↓
-OpenComputers
- ↓
-Tier-3 Zentrale
- ↓
-/home/Network.lua
- ↓
-/home/BuldacityUI.lua
- ↓
-Component Server
- ↓
-BULDACITY Desktop
- ↓
-SCAN
- ↓
-Client Component Agent
- ↓
-Mod Controller
- ↓
-BULDACITY/2 : 4242
- ↓
-PING/PONG
- ↓
-DEVICES
- ↓
-COMPONENTS
- ↓
-REMOTE
- ↓
-Mod-Dashboard
- ↓
-Autostart
-```
-
-## 20. Abschlusscheck
-
-- [ ] Zentrale startet
-- [ ] GPU-GUI sichtbar
-- [ ] Network.lua geladen
-- [ ] mindestens ein Modem erkannt
-- [ ] Component Server läuft
-- [ ] Client startet
-- [ ] Client erscheint in DEVICES
-- [ ] Modem-/Wireless-Diagnose sichtbar
+- [ ] `/home/Network.lua`
+- [ ] `/home/BuldacityUI.lua`
+- [ ] `/home/BuldacityOS_Tier3.lua`
+- [ ] `/home/BuldacityDesktop.lua` v10.2
+- [ ] `/home/BuldacityComponentServer.lua`
+- [ ] `/home/BuldacityComponentAgent.lua`
+- [ ] mindestens ein `modem` erkannt
+- [ ] Port 4242 geöffnet
+- [ ] Client sichtbar
+- [ ] Client anklickbar
 - [ ] PING/PONG PASS
 - [ ] Component IDs sichtbar
+- [ ] APPS sichtbar
 - [ ] Remote-Screen funktioniert
-- [ ] Mod-Dashboard funktioniert
 - [ ] Autostart funktioniert
 
 **Grundregel: Alle BULDACITY-Dateien werden aus `/home` geladen.**
