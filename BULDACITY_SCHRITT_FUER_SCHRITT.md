@@ -1,39 +1,32 @@
-# BULDACITY v10 – Schritt für Schritt
+# BULDACITY v10.2 – Schritt für Schritt
 
-Diese Anleitung beschreibt die aktuelle grafische BULDACITY-Version für Minecraft 1.7.10 + Forge + OpenComputers.
+Diese Anleitung beschreibt den aktuellen grafischen BULDACITY-Stand für Minecraft 1.7.10 + Forge + OpenComputers.
 
-## 1. Was v10 bietet
+## 1. Was v10.2 bietet
 
-BULDACITY verwendet eine gemeinsame GPU-Oberfläche (`BuldacityUI.lua`) und einen zentralen BULDACITY/2-Netzwerkdienst.
-
-Enthalten sind:
-
-- GPU-Panels, Karten und Balken
-- Status-LEDs, Badges und Buttons
-- Gauges, Sparklines und Diagramme
-- Pixel-Icons
-- Desktop / APPS / NETWORK / DEVICES / REMOTE / REACTOR
-- zentrale Component-Verwaltung
-- Remote-Screen
+- gemeinsame GPU-Oberfläche `BuldacityUI.lua`
+- BULDACITY/2-Netzwerk auf Port `4242`
 - Multi-Modem-Erkennung
-- Wired/Wireless-Diagnose
-- Signalstärke und Port-Anzeige
-- Relay-/Access-Point-Erkennung
-- PING/PONG- und Heartbeat-Diagnose
+- automatische Client-Discovery mit HELLO/HEARTBEAT
+- LINK_ACK, LINK_CONFIRM und PING/PONG
+- zentrale Component-Verwaltung
+- klickbare Client-/Controller-Einträge
+- DEVICES-, APPS- und REMOTE-Navigation
+- Remote-Screen
+- Wired/Wireless- und Relay/AP-Diagnose
+- Autostart für Server und Clients
 
 ## 2. Voraussetzungen
 
 - Minecraft `1.7.10`
 - Forge `10.13.4.1614`
-- OpenComputers für Minecraft 1.7.10
+- OpenComputers für 1.7.10
 - Tier-3-System für die Zentrale
-- GPU + Screen für die grafische Oberfläche
-- Netzwerkkomponente für Netzwerkbetrieb
+- GPU + Screen für die GUI
+- mindestens ein `modem` für Netzwerkbetrieb
 - gewünschte Mod + passende OC-Komponente/Adapter
 
-## 3. Grundregel: alles nach `/home`
-
-Alle BULDACITY-Lua-Dateien werden unter `/home` abgelegt.
+## 3. Alles nach `/home`
 
 ```text
 /home/Network.lua
@@ -50,7 +43,7 @@ Alle BULDACITY-Lua-Dateien werden unter `/home` abgelegt.
 
 Mod-spezifische Dateien ebenfalls nach `/home`.
 
-## 4. Zentrale aufbauen
+## 4. Zentrale starten
 
 ```text
 Tier-3 CPU
@@ -59,7 +52,7 @@ Speicher
 Tier-3 GPU
 Screen
 Keyboard
-Network/Wireless Network Card
+Modem
 ```
 
 Start:
@@ -68,7 +61,7 @@ Start:
 dofile("/home/BuldacityOS_Tier3.lua")
 ```
 
-## 5. Netzwerk-Hardware prüfen
+## 5. Modem prüfen
 
 ```lua
 local component=require("component")
@@ -77,21 +70,17 @@ for address,typ in component.list() do
 end
 ```
 
-Für BULDACITY-Netzwerk muss eine `modem`-Komponente vorhanden sein.
-
-Die Software sucht ausdrücklich mit:
+BULDACITY sucht ausdrücklich:
 
 ```lua
 component.list("modem", true)
 ```
 
-und verarbeitet alle gefundenen Modems.
-
 ## 6. Netzwerk starten
 
 ```text
-Protokoll: BULDACITY/2
-Port: 4242
+BULDACITY/2
+Port 4242
 ```
 
 Zentrale:
@@ -106,30 +95,9 @@ Client:
 dofile("/home/<Mod>Network_Modern.lua")
 ```
 
-## 7. Netzwerk-Scan
+## 7. Client entdecken
 
-Auf der Zentrale:
-
-```text
-DESKTOP → SCAN
-```
-
-Die NETWORK-Seite zeigt jetzt:
-
-```text
-SERVER MODEMS
-WIRELESS
-CLIENTS
-MODEM ADDRESS
-SIGNAL
-PORT 4242
-RELAY/AP
-SCAN STATUS
-```
-
-## 8. Client entdecken
-
-Der normale Ablauf:
+Die aktuelle Reihenfolge ist:
 
 ```text
 SERVER_HELLO
@@ -145,54 +113,38 @@ PING
 PONG PASS
  ↓
 HEARTBEAT
+ ↓
+COMPONENT_REQUEST
+ ↓
+COMPONENT_DATA
 ```
 
-Der Client erscheint anschließend unter `DEVICES`.
+Der Client registriert den Empfangs-Listener vor dem ersten HELLO. HELLO und HEARTBEAT werden anschließend regelmäßig erneut gesendet.
 
-## 9. Wireless
+## 8. SCAN
+
+Auf der Zentrale:
 
 ```text
-ZENTRALE ))) ((( CLIENT
+DESKTOP → SCAN
 ```
 
-oder:
+Danach `NETWORK` und `DEVICES` öffnen.
+
+## 9. Clients anklicken
+
+Die aktuelle Desktop-Version `v10.2` registriert Client-Zeilen als echte Button-/Touch-Zonen.
 
 ```text
-ZENTRALE ── Kabel ── RELAY/AP ))) ((( CLIENT
+DESKTOP → Client anklicken → DEVICES
+DEVICES → Client anklicken → Auswahl
+APPS → Controller anklicken → REMOTE
+REMOTE → REQUEST SCREEN
 ```
 
-Wireless-fähige Modems werden erkannt und ihre Stärke ausgelesen. Wenn `setStrength()` vorhanden ist, wird die konfigurierte maximale BULDACITY-Stärke verwendet.
+Wenn ein Client sichtbar ist, aber nicht reagiert, zuerst die aktuelle `BuldacityUI.lua` und `BuldacityDesktop.lua` aus `/home` prüfen.
 
-## 10. Netzwerkdiagnose
-
-```lua
-dofile("/home/BuldacityNetworkTest.lua")
-```
-
-Zusätzlich:
-
-```lua
-dofile("/home/BuldacityWirelessCheck_Modern.lua")
-```
-
-Prüfen:
-
-```text
-MODEM
-WIRELESS
-SIGNAL
-PORT
-ADDRESS
-RELAY/AP
-HELLO
-HEARTBEAT
-PING
-PONG
-DISTANCE
-LATENCY
-```
-
-## 11. Component-System
+## 10. Component-System
 
 Zentrale:
 
@@ -206,69 +158,59 @@ Client:
 /home/BuldacityComponentAgent.lua
 ```
 
-Die Component-Daten enthalten Typen, Adressen und Modemdiagnose.
+Der Agent meldet Hardware, Component-IDs und Modemdaten.
 
-Log:
+## 11. Wireless
 
 ```text
-/home/BuldacityComponents.log
+ZENTRALE ))) ((( CLIENT
 ```
 
-## 12. Component Dashboard
+oder:
+
+```text
+ZENTRALE ── Kabel ── RELAY/AP ))) ((( CLIENT
+```
+
+Test:
 
 ```lua
-dofile("/home/BuldacityComponentDashboard.lua")
+dofile("/home/BuldacityWirelessCheck_Modern.lua")
 ```
 
-Damit können Client-Componenten und IDs betrachtet werden.
+## 12. Netzwerkdiagnose
 
-## 13. APPS
+```lua
+dofile("/home/BuldacityNetworkTest.lua")
+```
 
-Die zentrale Oberfläche enthält eine eigene `APPS`-Seite für die erkannten Client-Anwendungen.
+Prüfen:
 
 ```text
-DESKTOP → APPS
+MODEM
+WIRELESS
+SIGNAL
+PORT
+ADDRESS
+RELAY/AP
+HELLO
+LINK_ACK
+LINK_CONFIRM
+PING
+PONG
+HEARTBEAT
+DISTANCE
+LATENCY
 ```
 
-Dort werden verbundene Controller und ihr Online-Status angezeigt.
+## 13. Remote-PC
 
-## 14. Remote-PC
-
-1. Client unter `DEVICES` auswählen.
+1. Client in `DEVICES` auswählen.
 2. `REMOTE` öffnen.
 3. `REQUEST SCREEN` senden.
-4. Client muss GPU + Screen besitzen.
+4. Client benötigt GPU + Screen.
 
-Die Übertragung erfolgt über BULDACITY-Pakete.
-
-## 15. Mod-Controller
-
-Vorhandene Controller umfassen unter anderem:
-
-```text
-3D Printer
-AE2
-Diesel Generator
-Extra Planets
-Forestry
-Galacticraft
-Gendustry
-Immersive Engineering
-Immersive Integration
-Immersive Railroading
-IndustrialCraft2
-LogisticsPipes
-Mekanism
-PneumaticCraft
-ProjectE
-RFTools
-RotaryCraft
-SGCraft
-ThermalExpansion
-Big Reactors / Extreme Reactors
-```
-
-## 16. Autostart
+## 14. Autostart
 
 ```text
 /home/BuldacityAutoStart.lua
@@ -276,7 +218,7 @@ Big Reactors / Extreme Reactors
 /home/buldacity-role.cfg
 ```
 
-Zentrale:
+Server:
 
 ```text
 ROLE=SERVER
@@ -289,7 +231,7 @@ ROLE=CLIENT
 CLIENT=BigReactors
 ```
 
-## 17. Fehler: kein Client
+## 15. Kein Client
 
 ```text
 1. Client läuft
@@ -297,50 +239,38 @@ CLIENT=BigReactors
 3. Network.lua vorhanden
 4. ComponentAgent vorhanden
 5. Network-Wrapper läuft
-6. Port 4242 geöffnet
-7. Wireless-Signal > 0 bei Wireless
+6. Port 4242 offen
+7. Wireless-Signal prüfen
 8. Relay/AP prüfen
 9. Zentrale SCAN
 10. NetworkTest
 ```
 
-Wenn `NETWORK → SERVER MODEMS` bereits `0` zeigt, zuerst die Netzwerkhardware der Zentrale reparieren.
-
-## 18. Fehler: kein Wireless
-
-Prüfen:
-
-```text
-Wireless-Modem vorhanden
-Signalstärke > 0
-Port 4242 offen
-Reichweite
-Relay/AP
-```
-
-## 19. Fehler: Remote leer
-
-Prüfen:
+## 16. Remote leer
 
 ```text
 Client ONLINE
 GPU vorhanden
 Screen vorhanden
 Network-Wrapper läuft
-REQUEST SCREEN
+REQUEST SCREEN ausführen
 ```
 
-## 20. Abschlussprüfung
+## 17. Logs
 
-- [ ] `/home/Network.lua`
-- [ ] `/home/BuldacityUI.lua`
-- [ ] `/home/BuldacityOS_Tier3.lua`
-- [ ] `/home/BuldacityDesktop.lua`
-- [ ] `/home/BuldacityComponentServer.lua`
-- [ ] `/home/BuldacityComponentAgent.lua`
-- [ ] mindestens ein Modem erkannt
-- [ ] Port 4242 geöffnet
-- [ ] Client sichtbar
+```text
+/home/BuldacityComponents.log
+```
+
+## 18. Abschlussprüfung
+
+- [ ] alle Kern-Dateien in `/home`
+- [ ] `modem` erkannt
+- [ ] Port 4242 offen
+- [ ] Zentrale läuft
+- [ ] Client läuft
+- [ ] Client erscheint in `DEVICES`
+- [ ] Client ist anklickbar
 - [ ] PING/PONG PASS
 - [ ] Component IDs sichtbar
 - [ ] APPS sichtbar
