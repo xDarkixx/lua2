@@ -1,8 +1,7 @@
 -- SGCraft_Modern.lua
 -- BULDACITY // STARGATE COMMAND CENTER v3
 -- Minecraft 1.7.10 / SGCraft-1.13.3-mc1.7.10.jar
--- Presentation/controller only. Network is intentionally kept in
--- SGCraftNetwork_Modern.lua and BULDACITY Network.lua.
+-- Presentation/controller only. Network stays separate in SGCraftNetwork_Modern.lua.
 local component=require("component")
 local event=require("event")
 local computer=require("computer")
@@ -21,9 +20,7 @@ local function addLog(s)
 end
 local function scan()
  gates={}
- for a in component.list("stargate",true) do
-  gates[#gates+1]={address=a,proxy=component.proxy(a)}
- end
+ for a in component.list("stargate",true) do gates[#gates+1]={address=a,proxy=component.proxy(a)} end
  selected=math.max(1,math.min(selected,math.max(1,#gates)))
  addLog("SCAN: "..#gates.." Stargate Interface(s)")
 end
@@ -61,15 +58,17 @@ local function sendMessage()
  if r==nil and e then addLog("MSG ERROR: "..tostring(e)) else addLog("MSG SENT: "..message) end
 end
 local function draw()
- local g=selectedGate();local data={page=page,gates={},selected=selected,gate=readGate(g),title="STARGATE COMMAND / "..string.upper(page)}
- for i,v in ipairs(gates) do local s=safe(v.proxy,"stargateState") or "Offline";data.gates[i]={address=v.address,state=s} end
+ local g=selectedGate();local gd=readGate(g)
+ local data={page=page,gates={},selected=selected,gate=gd,title="STARGATE COMMAND / "..string.upper(page),target=target,message=message,log=log,energyNeed=nil}
+ for i,v in ipairs(gates) do data.gates[i]={address=v.address,state=safe(v.proxy,"stargateState") or "Offline"} end
+ if g and page=="dial" and target~="" then data.energyNeed=safe(g.proxy,"energyToDial",target) end
  if page=="dial" then data.title="DIALING CONSOLE // TARGET "..(target=="" and "EMPTY" or target)
  elseif page=="iris" then data.title="IRIS SECURITY // ACCESS CONTROL"
  elseif page=="link" then data.title="LINK // MESSAGE CHANNEL" end
  UI.draw(data)
 end
 scan();draw()
-local lastDraw=0
+local lastDraw=computer.uptime()
 while running do
  local ev,_,a,b,key,ch=event.pull(0.2)
  if ev=="key_down" then
@@ -82,33 +81,34 @@ while running do
   elseif key==31 then scan()
   elseif key==15 and #gates>0 then selected=(selected%#gates)+1
   elseif key==32 and page=="dial" then dial()
-  elseif key==45 and page~="iris" then disconnect()
+  elseif key==45 then disconnect()
   elseif key==24 and page=="iris" then iris(true)
   elseif key==46 and page=="iris" then iris(false)
   elseif key==50 and page=="link" then sendMessage()
   elseif key==14 then if page=="dial" then target=target:sub(1,-2) elseif page=="link" then message=message:sub(1,-2) end
-  elseif ch and ch>=32 and ch<=126 then
-   if page=="dial" then target=target..string.char(ch):upper() elseif page=="link" then message=message..string.char(ch) end
-  end
+  elseif ch and ch>=32 and ch<=126 then if page=="dial" then target=target..string.char(ch):upper() elseif page=="link" then message=message..string.char(ch) end end
   draw()
  elseif ev=="touch" then
   local x,y=a,b
+  local handled=false
   for id in pairs(UI.buttons) do
    if UI.hit(id,x,y) then
+    handled=true
     if id=="status" or id=="gates" or id=="dial" or id=="iris" or id=="link" then page=id
     elseif id=="scan" then scan()
+    elseif id=="dialNow" then dial()
+    elseif id=="disconnect" then disconnect()
+    elseif id=="openIris" then iris(true)
+    elseif id=="closeIris" then iris(false)
+    elseif id=="sendMessage" then sendMessage()
     end
     draw();break
    end
   end
-  if page=="gates" and y>=8 and y<=UI.H-5 then
-   local i=math.floor((y-8)/3)+1
-   if gates[i] then selected=i;draw() end
-  end
+  if not handled and page=="gates" and y>=8 and y<=UI.H-5 then local i=math.floor((y-8)/3)+1;if gates[i] then selected=i;draw() end end
  elseif ev=="sgStargateStateChange" or ev=="sgChevronEngaged" or ev=="sgIrisStateChange" or ev=="sgDialIn" or ev=="sgDialOut" then
   addLog(ev);draw()
- elseif ev=="sgMessageReceived" then
-  addLog("REMOTE MSG: "..tostring(a));draw()
+ elseif ev=="sgMessageReceived" then addLog("REMOTE MSG: "..tostring(a));draw()
  end
  if computer.uptime()-lastDraw>0.5 then lastDraw=computer.uptime();draw() end
 end
