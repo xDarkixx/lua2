@@ -1,42 +1,32 @@
 -- BULDACITY SGCraft API adapter
 -- OpenComputers 1.7.10 / SGCraft 1.13.x compatible.
--- Important: SGCraft 1.13.x returns nil,error on API failures instead of
--- throwing Lua errors. We therefore distinguish pcall success from API success.
+-- The visual layer is intentionally NOT handled here.
+-- This file only isolates hardware/API access so the BULDACITY UI stays unchanged.
 
 local component = require("component")
 local API = {}
 
-local function invoke(proxy, name, ...)
-  if not proxy then return false, nil, "no interface" end
-
-  local fn = proxy[name]
-  if type(fn) ~= "function" then
-    return false, nil, "method unavailable: " .. tostring(name)
+local function directInvoke(address, name, ...)
+  if not address or address == "" then
+    return false, nil, "no interface address"
   end
 
   local argc = select("#", ...)
   local ok, a, b, c
 
-  -- Do not depend on table.unpack/table.pack here. Some older OC Lua builds
-  -- differ in which table helpers are available.
+  -- component.invoke(address, method, ...) is the most reliable low-level
+  -- OpenComputers call for old 1.7.10 environments. It avoids differences
+  -- between bound component proxy functions and method wrappers.
   if argc == 0 then
-    ok, a, b, c = pcall(function()
-      return fn()
-    end)
+    ok, a, b, c = pcall(component.invoke, address, name)
   elseif argc == 1 then
-    local arg1 = select(1, ...)
-    ok, a, b, c = pcall(function()
-      return fn(arg1)
-    end)
+    ok, a, b, c = pcall(component.invoke, address, name, select(1, ...))
   elseif argc == 2 then
-    local arg1, arg2 = select(1, ...), select(2, ...)
-    ok, a, b, c = pcall(function()
-      return fn(arg1, arg2)
-    end)
+    ok, a, b, c = pcall(component.invoke, address, name, select(1, ...), select(2, ...))
   else
     local args = {...}
     ok, a, b, c = pcall(function()
-      return fn(unpack(args))
+      return component.invoke(address, name, unpack(args))
     end)
   end
 
@@ -44,12 +34,50 @@ local function invoke(proxy, name, ...)
     return false, nil, tostring(a)
   end
 
-  -- SGCraft 1.13.x reports failures as nil,error_message.
+  -- SGCraft 1.13.x returns nil,error_message for API-level failures.
   if a == nil then
     return false, nil, tostring(b or ("API call failed: " .. tostring(name)))
   end
 
   return true, a, b, c
+end
+
+local function proxyInvoke(proxy, address, name, ...)
+  -- Keep a proxy fallback for unusual OC component implementations.
+  if proxy and type(proxy[name]) == "function" then
+    local argc = select("#", ...)
+    local ok, a, b, c
+    if argc == 0 then
+      ok, a, b, c = pcall(proxy[name])
+    elseif argc == 1 then
+      ok, a, b, c = pcall(proxy[name], select(1, ...))
+    elseif argc == 2 then
+      ok, a, b, c = pcall(proxy[name], select(1, ...), select(2, ...))
+    else
+      local args = {...}
+      ok, a, b, c = pcall(function() return proxy[name](unpack(args)) end)
+    end
+    if ok and a ~= nil then return true, a, b, c end
+    if not ok then return false, nil, tostring(a) end
+    return false, nil, tostring(b or ("API call failed: " .. tostring(name)))
+  end
+  return false, nil, "method unavailable: " .. tostring(name)
+end
+
+local function invoke(gate, name, ...)
+  if not gate or not gate.address then
+    return false, nil, "no interface"
+  end
+
+  -- Prefer component.invoke. If the environment rejects it, try the proxy.
+  local ok, a, b, c = directInvoke(gate.address, name, ...)
+  if ok then return true, a, b, c end
+
+  local pok, pa, pb, pc = proxyInvoke(gate.proxy, gate.address, name, ...)
+  if pok then return true, pa, pb, pc end
+
+  -- Return the direct error first because that is normally the real hardware/API error.
+  return false, nil, tostring(b or a or pb or "API call failed: " .. tostring(name))
 end
 
 API.invoke = invoke
@@ -83,6 +111,14 @@ function API.list()
         primary = (address == primary),
         methods = methodMap(address)
       }
+    else
+      -- Keep the component visible even if proxy creation is unusual.
+      result[#result + 1] = {
+        address = address,
+        proxy = nil,
+        primary = (address == primary),
+        methods = methodMap(address)
+      }
     end
   end
 
@@ -99,12 +135,11 @@ function API.read(gate)
     }
   end
 
-  local p = gate.proxy
-  local okState, state, stateError, stateExtra = invoke(p, "stargateState")
-  local okLocal, localAddress, localError = invoke(p, "localAddress")
-  local okRemote, remoteAddress, remoteError = invoke(p, "remoteAddress")
-  local okEnergy, energy, energyError = invoke(p, "energyAvailable")
-  local okIris, iris, irisError = invoke(p, "irisState")
+  local okState, state, stateError, stateExtra = invoke(gate, "stargateState")
+  local okLocal, localAddress, localError = invoke(gate, "localAddress")
+  local okRemote, remoteAddress, remoteError = invoke(gate, "remoteAddress")
+  local okEnergy, energy, energyError = invoke(gate, "energyAvailable")
+  local okIris, iris, irisError = invoke(gate, "irisState")
 
   local engaged = 0
   local direction = ""
@@ -144,22 +179,22 @@ function API.read(gate)
 end
 
 function API.dial(gate, address)
-  return invoke(gate and gate.proxy, "dial", address)
+  return invoke(gate, "dial", address)
 end
 function API.disconnect(gate)
-  return invoke(gate and gate.proxy, "disconnect")
+  return invoke(gate, "disconnect")
 end
 function API.openIris(gate)
-  return invoke(gate and gate.proxy, "openIris")
+  return invoke(gate, "openIris")
 end
 function API.closeIris(gate)
-  return invoke(gate and gate.proxy, "closeIris")
+  return invoke(gate, "closeIris")
 end
 function API.sendMessage(gate, message)
-  return invoke(gate and gate.proxy, "sendMessage", message)
+  return invoke(gate, "sendMessage", message)
 end
 function API.energyToDial(gate, address)
-  return invoke(gate and gate.proxy, "energyToDial", address)
+  return invoke(gate, "energyToDial", address)
 end
 
 return API
