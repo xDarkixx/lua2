@@ -1,158 +1,100 @@
-# lua2
+# lua2 – BULDACITY/2
 
-OpenComputers-Lua-Programme für Minecraft 1.7.10 und die jeweils im Script angegebenen Mod-Versionen.
+OpenComputers-Lua-Programme für Minecraft 1.7.10.
 
-## Aktueller BULDACITY-Stand
+> **🟢 Anfänger? Dann starte mit [`docs/01_START_HIER.md`](docs/01_START_HIER.md).**
+>
+> Du musst kein Lua können. Die Dateien bleiben bewusst zunächst im Hauptordner, damit bestehende Installationen nicht kaputtgehen. Die neuen Ordner dienen als übersichtliche Struktur und Anleitung.
 
-BULDACITY verwendet einen zentralen Tier-3-Desktop und normale OpenComputers-Controller als Clients.
-
-- Zentraler Desktop: `BuldacityOS_Tier3.lua`
-- Netzwerk: `Network.lua`
-- Protokoll: `BULDACITY/2`
-- Port: `4242`
-- Gemeinsames UI-Design: `BuldacityUI.lua`
-- Generisches Dashboard: `BuldacityComponentDashboard.lua`
-- Automatischer Netzwerk-Assistent: `BuldacityNetworkSetup.lua`
-- Autostart: `BuldacityAutoStart.lua`
-- Vollständige Schritt-für-Schritt-Anleitung: `BULDACITY_SCHRITT_FUER_SCHRITT.md`
-
-## Automatischer Netzwerk-Assistent
-
-Der Tier-3-Server führt beim Start automatisch einen kurzen Netzwerkcheck aus. Dadurch muss das Netzwerk nicht mehr von Hand eingerichtet werden.
-
-Der Assistent:
-
-- erkennt alle vorhandenen OpenComputers-`modem`-Komponenten
-- öffnet automatisch Port `4242`
-- setzt die Wireless-Stärke auf `400`, wenn die Hardware dies unterstützt
-- erkennt BULDACITY-Clients automatisch
-- führt Link- und Ping-Tests durch
-- fragt die Komponenten der Clients automatisch ab
-- zeigt Client-Status, Verbindung, WLAN/Wired, Entfernung und Latenz an
-- erkennt bekannte Mod-Komponenten wie AE2, Diesel Generator, Big Reactors, RotaryCraft, IndustrialCraft 2, Mekanism, Thermal Expansion, PneumaticCraft und RFTools
-- startet anschließend automatisch den normalen BULDACITY-Desktop
-
-Es sind keine UUID-Listen oder manuellen Netzwerkadressen erforderlich.
-
-### Startablauf
+## 🗂️ So ist das Projekt aufgebaut
 
 ```text
-Tier-3 Server
-    ↓
-Modem erkennen
-    ↓
-Port 4242 öffnen
-    ↓
-Wireless konfigurieren
-    ↓
-Clients suchen
-    ↓
-PING / LINK prüfen
-    ↓
-Komponenten inventarisieren
-    ↓
-BULDACITY Desktop
+lua2/
+├── docs/                 ← 🟢 HIER STARTEN
+│   ├── 01_START_HIER.md
+│   ├── 02_HARDWARE.md
+│   ├── 03_NETZWERK.md
+│   └── 04_AUTOSTART.md
+├── server/               ← Zentrale
+├── network/              ← Netzwerk
+├── clients/              ← Geräte / Mods
+│   ├── bigreactors/
+│   └── sgcraft/
+├── boot/                 ← Autostart
+├── tools/                ← Diagnose
+└── Root-Dateien          ← kompatibel mit bisherigen Installationen
 ```
 
-Wenn kein Modem vorhanden ist, zeigt der Assistent ausdrücklich `FEHLER: KEIN MODEM` an. Ein echter Minecraft/OpenComputers-Laufzeittest muss anschließend in der Welt durchgeführt werden.
+## 🌐 Netzwerk – möglichst einfach
 
-## Desktop
+BULDACITY verwendet **BULDACITY/2** auf Port **4242**.
 
-Der zentrale Desktop bietet unter anderem:
+Die vorhandene `Network.lua` erkennt Modems automatisch, öffnet Port 4242, erkennt Wireless-Hardware und unterstützt Client-Discovery, Link/Ping-Tests und Komponentenabfragen.
 
-- HOME
-- NETWORK
-- DEVICES
-- APPS
-- DISKS
-- SYSTEM
-- REMOTE
-- REACTOR
+Der zentrale Ablauf ist:
 
-Er verwendet Panels, Statusanzeigen, Live-Werte, Gauges, Buttons und Touch-Bereiche. Die Oberfläche passt sich an die verfügbare GPU-Auflösung an.
+```text
+SERVER STARTEN
+      ↓
+MODEM AUTOMATISCH FINDEN
+      ↓
+PORT 4242
+      ↓
+CLIENT STARTEN
+      ↓
+AUTOMATISCHE ERKENNUNG
+      ↓
+PING / LINK
+      ↓
+GERÄTE IN DEVICES
+```
 
-## Controller
+Du brauchst dafür normalerweise keine UUID-Whitelist und musst keine Adressen von Hand eintragen.
 
-Die klassischen Normal-Dateien bleiben erhalten. Die grafischen `_Modern.lua` Controller bleiben lokale Apps und werden nicht heimlich durch den Netzwerkcode ersetzt.
+## 🖥️ Zentrale
 
-Network-Controller laufen auf normalen OpenComputers-PCs und verbinden sich mit dem zentralen Tier-3-System.
+- `BuldacityOS_Tier3.lua` – zentraler Desktop
+- `BuldacityNetworkSetup.lua` – automatischer Netzwerkcheck
+- `Network.lua` – BULDACITY/2 Netzwerkdienst
+- `BuldacityUI.lua` – gemeinsames UI
+- `BuldacityComponentDashboard.lua` – Geräte-/Komponenten-Dashboard
+- `BuldacityAutoStart.lua` – Autostart
 
-## Big Reactors 0.4.3A
+## ⚙️ Clients
 
-`ReactorBigReactors043A_Touch_Responsive.lua` besitzt eine eigene grafische Oberfläche mit:
+Die grafischen Controller bleiben lokale Apps. Network-Controller verbinden die Geräte mit der Zentrale.
 
-- CORE
-- RODS
-- TURBINE
-- Energie
-- Brennstoff
-- Temperatur
-- Control Rods
-- AUTO
-- Sicherheitsabschaltung
-- Turbinenstatus
-- Rotor Speed
-- Output
-- Fluid Flow
-- Inductor
+### Big Reactors
 
-## Mod-Familien
+- `ReactorBigReactors043A_Touch_Responsive.lua`
+- `ReactorBigReactors043A_Network.lua`
 
-Aktuelle Controller gibt es unter anderem für:
+Siehe [`clients/bigreactors/README.md`](clients/bigreactors/README.md).
 
-- Applied Energistics 2
-- Big Reactors
-- Diesel Generator / Immersive Engineering
-- ExtraPlanets
-- Forestry
-- Galacticraft
-- Gendustry
-- Immersive Integration
-- Immersive Railroading
-- IndustrialCraft 2
-- LogisticsPipes
-- Mekanism
-- PneumaticCraft
-- ProjectE
-- RFTools
-- RotaryCraft
-- SGCraft
-- Thermal Expansion
-- OpenComputers 3D Printer
+### SGCraft
 
-## Installation – Kurzfassung
+- `SGCraft_Modern.lua`
+- `SGCraftNetwork_Modern.lua`
 
-1. Minecraft 1.7.10 + Forge installieren.
-2. OpenComputers und benötigte Mods installieren.
-3. Tier-3-Zentrale bauen.
-4. `Network.lua`, `BuldacityNetworkSetup.lua` und `BuldacityOS_Tier3.lua` nach `/home` kopieren.
-5. Zentrale starten.
-6. Pro Mod einen normalen Controller-PC aufbauen.
-7. `Network.lua` und den passenden Network-Controller nach `/home` kopieren.
-8. Mod-Komponente bzw. Adapter anschließen.
-9. Lokale Modern-GUI testen.
-10. Network-Controller starten.
-11. Die Zentrale führt den automatischen Netzwerkcheck aus.
-12. `DEVICES` prüfen.
-13. `REMOTE` testen.
-14. Autostart einrichten.
+Siehe [`clients/sgcraft/README.md`](clients/sgcraft/README.md).
 
-## Schritt-für-Schritt
+## 📚 Dokumentation
 
-Die vollständige aktuelle Anleitung steht in `BULDACITY_SCHRITT_FUER_SCHRITT.md`.
-
-Weitere Dokumentation:
-
+- 🟢 [`START HIER`](docs/01_START_HIER.md)
+- 🔧 [`Hardware`](docs/02_HARDWARE.md)
+- 🌐 [`Netzwerk`](docs/03_NETZWERK.md)
+- ▶️ [`Autostart`](docs/04_AUTOSTART.md)
+- `BULDACITY_SCHRITT_FUER_SCHRITT.md`
 - `BULDACITY_SETUP_GUIDE.md`
 - `BULDACITY_NETWORK.md`
 - `BULDACITY_WIRELESS_SETUP.md`
 - `BULDACITY_MOD_SETUP_ADDONS.md`
 - `COMPONENTS.md`
-- `BULDACITY_AUTOSTART.md`
-- `BuldacityNetworkSetup.lua`
 
-## Wichtiger Installationsgrundsatz
+## 🔴 Wichtig bei Fehlern
 
-**Installieren → Anschließen → automatische Einrichtung → Scannen → lokale GUI testen → Netzwerk testen → Zentrale prüfen → Autostart aktivieren.**
+Immer in dieser Reihenfolge prüfen:
 
-Bei fehlenden Funktionen immer die tatsächlich verfügbaren OpenComputers-Komponenten und Methoden prüfen. Ein Adapter garantiert nicht automatisch eine vollständige Mod-API.
+**Hardware → Modem → Network.lua → lokale Mod-GUI → Network-Controller → Zentrale → Autostart.**
+
+So lässt sich ein Fehler schnell eingrenzen, ohne zehn Dateien gleichzeitig zu ändern.
