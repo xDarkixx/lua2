@@ -1,22 +1,36 @@
 # BULDACITY Modern Clients
 
-Gemeinsame Client-Basis für alle modernen OpenComputers-Geräte. Die vorhandenen mod-spezifischen Client-Ordner bleiben erhalten.
+Gemeinsame Client-Basis für alle modernen OpenComputers-Geräte.
 
-## Gemeinsame Lua-Basis
+## Struktur
 
-- `Client.lua` – Registrierung am TIER3, Heartbeat, Status, Commands und Emergency-Stop.
-- `Config.lua` – Protokoll, Port und Client-Defaults.
-- `Device.lua` – sichere OpenComputers-Hardware-Helfer.
-- `Startup.lua` – optionaler Start-Wrapper für Controller.
+- `Client.lua` – zentrale Client-Runtime.
+- `Config.lua` – Client-Defaults.
+- `Device.lua` – sichere Hardware-Helfer.
+- `Startup.lua` – optionaler Starter.
+- `network/ClientProtocol.lua` – Protokoll-Fassade; Quelle bleibt `network-modern/Protocol.lua`.
+- `network/ClientTransport.lua` – Transport-Fassade; Quelle bleibt `network-modern/Transport.lua`.
+- `network/ClientDiscovery.lua` – HELLO/PING/Discovery.
+- `network/ClientHeartbeat.lua` – Heartbeat und Retry-Timer.
+- `network/ClientCommands.lua` – zentrale Commands und Ergebnisse.
+- `network/ClientStatus.lua` – Statusmeldungen und Snapshots.
 
-## Architektur
+## Keine doppelte Netzwerklogik
+
+Die Dateien unter `clients/network/` sind bewusst dünne Client-Fassaden. Es gibt **keine zweite Protokoll- oder Transport-Implementierung**. Dadurch bleiben Port, Protokoll, Paketformat, TTL und Modem-Transport zentral in `network-modern/`.
 
 ```text
 *_Modern.lua
     |
     +-- clients/Client.lua
-    +-- clients/Config.lua
-    +-- clients/Device.lua
+    |      |
+    |      +-- clients/network/ClientDiscovery.lua
+    |      +-- clients/network/ClientHeartbeat.lua
+    |      +-- clients/network/ClientCommands.lua
+    |      +-- clients/network/ClientStatus.lua
+    |      |
+    |      +-- clients/network/ClientProtocol.lua
+    |      +-- clients/network/ClientTransport.lua
     |
     v
 network-modern/Network.lua
@@ -25,26 +39,24 @@ network-modern/Network.lua
 RELAY -> TIER3-CORE
 ```
 
-## Was jeder Client braucht
+## Was jeder Client benötigt
 
 1. OpenComputers mit Modem.
-2. `clients/` mit der gemeinsamen Client-Basis.
-3. `network-modern/` mit `Network.lua`, `Protocol.lua`, `Transport.lua` und `Registry.lua`.
-4. Das jeweilige `*_Modern.lua` Controller-Skript.
-5. Verbindung zu Relay/TIER3.
+2. `clients/`.
+3. `network-modern/`.
+4. Sein jeweiliges `*_Modern.lua` Controller-Skript.
+5. Netzwerkweg zu Relay/TIER3.
 
-Die Hardwarelogik bleibt im jeweiligen Controller. Die gemeinsame Client-Basis übernimmt die Netzwerkkommunikation.
+Die Hardwarelogik bleibt im Controller. Die Client-Basis übernimmt Registrierung, Heartbeat, Status, Commands, ACK/Retry und Emergency-Stop.
 
-## Vorhandene Client-Bereiche
+## Netzwerk
 
-`ae2/`, `bigreactors/`, `sgcraft/`, `diesel/`, `3dprinter/`, `forestry/`, `galacticraft/`, `gendustry/`, `immersiveengineering/`, `immersiveintegration/`, `immersiverailroading/`, `industrialcraft2/`, `logisticspipes/`, `mekanism/`, `pneumaticcraft/`, `projecte/`, `rftools/`, `rotarycraft/`, `thermalexpansion/`, `thermal/`.
-
-## Netzwerkregeln
-
-- Client-zu-Client-Verkehr wird zentral über `TIER3-CORE` geroutet.
-- Modernes Netzwerk: Port `31337`, Protokoll `BULDACITY`.
+- Modernes Protokoll: `BULDACITY`.
+- Port: `31337`.
+- Route: Client → Relay → TIER3-CORE.
+- Client-zu-Client wird nicht direkt geroutet.
 - Das alte Netzwerk auf Port `4242` bleibt getrennt.
-- Port `31337` niemals direkt ins Internet öffnen; Remote-Zugriff geht über Gateway/Bridge zum TIER3.
+- Port `31337` nicht direkt ins Internet öffnen.
 
 ## Beispiel
 
@@ -56,9 +68,12 @@ local ok,err=Client.start(
   {"STATUS","CONTROL"},
   {mod="MyMod"},
   function(command)
-    -- Vorhandene Hardware-Steuerung aufrufen.
     return true,"OK"
   end
 )
 if not ok then error(err) end
 ```
+
+## Vorhandene Client-Bereiche
+
+`ae2/`, `bigreactors/`, `sgcraft/`, `diesel/`, `3dprinter/`, `forestry/`, `galacticraft/`, `gendustry/`, `immersiveengineering/`, `immersiveintegration/`, `immersiverailroading/`, `industrialcraft2/`, `logisticspipes/`, `mekanism/`, `pneumaticcraft/`, `projecte/`, `rftools/`, `rotarycraft/`, `thermalexpansion/`, `thermal/`.
