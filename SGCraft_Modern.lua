@@ -31,8 +31,9 @@ local function downloadWithWget(file)
     filesystem.remove(file.path)
   end
 
-  -- OpenComputers wget handles the Internet Card, HTTP and file writing.
-  local command = "wget -f " .. shell.quote(file.url) .. " " .. shell.quote(tmp)
+  -- Do not use shell.quote(): it is not available in all OpenComputers 1.7.10 builds.
+  -- These URLs and target paths contain no spaces, so plain arguments are safe here.
+  local command = "wget -f " .. file.url .. " " .. tmp
   say("wget: " .. file.url)
 
   local ok, result = pcall(shell.execute, command)
