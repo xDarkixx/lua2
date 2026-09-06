@@ -4,6 +4,7 @@
 
 local gml = require("gml")
 local unicode = require("unicode")
+local colorGrid = require("color_grid")
 
 local graphics = {}
 local version = "2.0"
@@ -43,6 +44,37 @@ local function fit(s, n)
     if #s <= n then return s end
     if n <= 3 then return s:sub(1, n) end
     return s:sub(1, n - 3) .. "..."
+end
+
+-- Replace the old block-letter SGCX header with a compact vector-style HUD emblem.
+do
+    local originalGrid = colorGrid.grid
+    colorGrid.grid = function(definition)
+        local grid = originalGrid(definition)
+        grid.generateComponent = function(self, gui, x, y)
+            local component = gml.api.baseComponent(gui, x, y, 31, 5, "sgcx_logo", false)
+            component.draw = function(c)
+                if c:isHidden() then return end
+                local g = c.renderTarget
+                fill(g, c.posX, c.posY, 31, 5, C.panel)
+                fill(g, c.posX, c.posY, 31, 1, C.cyan)
+                fill(g, c.posX, c.posY + 4, 31, 1, C.frame)
+                fill(g, c.posX, c.posY, 1, 5, C.frame)
+                fill(g, c.posX + 30, c.posY, 1, 5, C.frame)
+                fill(g, c.posX + 2, c.posY + 2, 5, 1, C.cyan)
+                fill(g, c.posX + 2, c.posY + 3, 5, 1, C.blue)
+                fill(g, c.posX + 8, c.posY + 1, 1, 3, C.edge)
+                fill(g, c.posX + 10, c.posY + 1, 1, 3, C.edge)
+                fill(g, c.posX + 12, c.posY + 1, 1, 3, C.edge)
+                text(g, c.posX + 15, c.posY + 2, "SGC", C.white, C.panel)
+                text(g, c.posX + 20, c.posY + 2, "STARGATE", C.cyan, C.panel)
+                c.visible = true
+            end
+            gui:addComponent(component)
+            return component
+        end
+        return grid
+    end
 end
 
 local glyphPatterns = {
@@ -112,7 +144,6 @@ local function drawSideTelemetry(t)
     local state = tostring(d.state or "NO INTERFACE")
     local engaged = tonumber(d.engaged or 0) or 0
     local iris = tostring(d.iris or "Offline")
-
     fill(g, x, y, 17, 31, C.panel)
     fill(g, x, y, 17, 1, C.panel2)
     text(g, x + 1, y, "GATE TELEMETRY", C.cyan, C.panel2)
@@ -141,20 +172,12 @@ function graphics.createStargateComponent(gui, startX, startY)
     t.symbolIndex, t.symbols, t.shouldDraw = 0, {}, true
     t.connected, t.irisClosed, t.redrawRequired = false, false, false
     t.data, t.phase = {}, 0
-
-    t.onIrisOpened = function(self)
-        self.irisClosed, self.data.iris = false, "Open"; self:draw()
-    end
-    t.onIrisClosed = function(self)
-        self.irisClosed, self.data.iris = true, "Closed"; self:draw()
-    end
+    t.onIrisOpened = function(self) self.irisClosed, self.data.iris = false, "Open"; self:draw() end
+    t.onIrisClosed = function(self) self.irisClosed, self.data.iris = true, "Closed"; self:draw() end
     t.onConnected = function(self, remoteAddress)
         self.connected, self.data.state = true, "Connected"
-        self.data.remote = remoteAddress or self.data.remote
-        self.data.engaged = 9
-        if remoteAddress and self.symbolIndex == 0 then
-            for i = 1, math.min(9, #remoteAddress) do self.lockSymbol(self, i, remoteAddress:sub(i, i)) end
-        end
+        self.data.remote, self.data.engaged = remoteAddress or self.data.remote, 9
+        if remoteAddress and self.symbolIndex == 0 then for i = 1, math.min(9, #remoteAddress) do self.lockSymbol(self, i, remoteAddress:sub(i, i)) end end
         self:draw()
     end
     t.onDisconnected = function(self)
@@ -162,9 +185,7 @@ function graphics.createStargateComponent(gui, startX, startY)
         self:lockSymbol(0); self:draw()
     end
     t.onSymbolLocked = function(self, number, symbolLetter)
-        if number and number > 0 then
-            self.data.state, self.data.engaged = "Dialling", number
-        end
+        if number and number > 0 then self.data.state, self.data.engaged = "Dialling", number end
         self:lockSymbol(number, symbolLetter)
     end
     t.suspendDrawing = function(self) self.shouldDraw = false end
@@ -174,49 +195,34 @@ function graphics.createStargateComponent(gui, startX, startY)
     end
     t.lockSymbol = function(self, number, symbolLetter)
         if number == 0 then self.symbolIndex, self.symbols = 0, {}; self:draw(); return end
-        if number >= 1 and number <= 9 then
-            self.symbolIndex = math.max(self.symbolIndex, number)
-            self.symbols[number] = symbolLetter or ""
-            self:draw()
-        end
+        if number >= 1 and number <= 9 then self.symbolIndex = math.max(self.symbolIndex, number); self.symbols[number] = symbolLetter or ""; self:draw() end
     end
-    t.tick = function(self)
-        self.phase = self.phase + 1
-        if self.shouldDraw then self:draw() end
-    end
+    t.tick = function(self) self.phase = self.phase + 1; if self.shouldDraw then self:draw() end end
     t.draw = function(self)
         if self:isHidden() then return end
         if not self.shouldDraw then self.redrawRequired = true; return end
-
         local g, x, y = self.renderTarget, self.posX, self.posY
         local w, h = totalWidth, totalHeight
         local state = tostring(self.data.state or "Idle")
         local active = state ~= "Offline" and state ~= "NO INTERFACE" and state ~= "API ERROR"
         local dialing = state == "Dialling"
         local pulse = (self.phase % 4) < 2
-
         fill(g, x, y, w, h, C.panel)
-        fill(g, x, y, w, 1, C.cyan)
-        fill(g, x, y + h - 1, w, 1, C.frame)
-        fill(g, x, y, 1, h, C.frame)
-        fill(g, x + w - 1, y, 1, h, C.frame)
+        fill(g, x, y, w, 1, C.cyan); fill(g, x, y + h - 1, w, 1, C.frame)
+        fill(g, x, y, 1, h, C.frame); fill(g, x + w - 1, y, 1, h, C.frame)
         text(g, x + 2, y, "STARGATE // SGCX", C.white, C.cyan)
         text(g, x + w - 13, y, active and "ONLINE" or "OFFLINE", active and C.green or C.red, C.cyan)
-
         local cx, cy, rx, ry = x + 28, y + 17, 21, 13
         fill(g, cx - rx + 2, cy - ry + 2, rx * 2 - 4, ry * 2 - 4, C.black)
         drawRing(g, cx, cy, rx, ry, active, dialing and ((self.phase * 14) % 360) or 0)
-
         for i = 1, 39 do
             local angle = -90 + (i - 1) * (360 / 39)
             local gx, gy = point(cx, cy, rx - 5, ry - 4, angle)
             local locked = self.symbols[i] ~= nil or i <= self.symbolIndex
             drawGlyph(g, gx, gy, i, locked and C.active or C.edge, C.panel)
         end
-
         local engaged = tonumber(self.data.engaged or self.symbolIndex or 0) or 0
         for i = 1, 9 do drawChevron(g, cx, cy, rx + 1, ry + 1, -90 + (i - 1) * 40, i <= engaged, pulse) end
-
         if self.irisClosed then
             drawIris(g, cx, cy, rx - 7, ry - 5)
         elseif state == "Connected" or state == "Opening" then
@@ -231,7 +237,6 @@ function graphics.createStargateComponent(gui, startX, startY)
         elseif not active then
             text(g, cx - 5, cy, "NO LINK", C.red, C.panel)
         end
-
         text(g, x + 3, y + h - 3, "REMOTE", C.muted, C.panel)
         text(g, x + 11, y + h - 3, fit(self.data.remote or "—", 17), C.white, C.panel)
         text(g, x + 34, y + h - 3, "CHEVRONS", C.muted, C.panel)
@@ -239,7 +244,6 @@ function graphics.createStargateComponent(gui, startX, startY)
         drawSideTelemetry(self)
         self.visible = true
     end
-
     t:draw()
     return t
 end
