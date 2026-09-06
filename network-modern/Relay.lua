@@ -1,4 +1,4 @@
--- BULDACITY MODERN CENTRAL RELAY
+-- Modern central relay
 local component=require("component")
 local event=require("event")
 local serialization=require("serialization")
@@ -9,7 +9,7 @@ local TIER3_ID="TIER3-CORE"
 local MAX_SEEN=2048
 local seen={};local stats={received=0,forwarded=0,dropped=0,invalid=0};local modems={};local tier3={}
 for address,_ in component.list("modem",true) do local m=component.proxy(address);if m then modems[#modems+1]=m end end
-if #modems<2 then io.stderr:write("BULDACITY RELAY: two modem/network-card interfaces are required.\n");return false end
+if #modems<2 then io.stderr:write("MODERN RELAY: two modem/network-card interfaces are required.\n");return false end
 local function now()return computer.uptime()end
 local function trimSeen()local n=0;local oldestId=nil;local oldest=math.huge;for id,t in pairs(seen)do n=n+1;if t<oldest then oldest=t;oldestId=id end end;if n>MAX_SEEN and oldestId then seen[oldestId]=nil end end
 local function markSeen(id)seen[id]=now();trimSeen()end
@@ -44,7 +44,9 @@ event.listen("modem_message",function(_,receiver,sender,port,distance,raw)
     if p.source==TIER3_ID then tier3.address=sender;tier3.receiver=receiver end
     forwardCentralPacket(sourceInterface,p);return
   end
-  if p.type=="HELLO" or p.type=="HEARTBEAT" or p.type=="STATUS" or p.type=="COMMAND" or p.type=="EMERGENCY_STOP" then forwardToTier3(sourceInterface,p) end
+  if p.type=="HELLO" or p.type=="HEARTBEAT" or p.type=="STATUS" or p.type=="COMMAND" or p.type=="EMERGENCY_STOP" or p.type=="UI_FRAME" then
+    forwardToTier3(sourceInterface,p)
+  end
 end)
 local function announce()
   local relayId="RELAY-"..tostring(modems[1].address)
@@ -52,5 +54,5 @@ local function announce()
   local raw=serialization.serialize(p);for _,m in ipairs(modems)do pcall(function()m.broadcast(PORT,raw)end)end
 end
 event.timer(10,announce,math.huge);announce()
-print("BULDACITY CENTRAL RELAY online | port "..tostring(PORT).." | interfaces "..tostring(#modems))
+print("MODERN CENTRAL RELAY online | port "..tostring(PORT).." | interfaces "..tostring(#modems))
 while true do local _,reason=event.pull(30);if reason=="interrupted" then break end end
