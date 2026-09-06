@@ -1,17 +1,6 @@
 -- ForestryNetwork_Modern.lua
--- BULDACITY/2 network wrapper for Forestry_Modern.lua.
--- The Modern controller remains unchanged; this file only adds the shared client bridge.
-
-local Network=require("Network")
+local Network=require("network-modern.Network")
 local shell=require("shell")
-local ok,mode=Network.startClient("Forestry // Command Center",{
-  controller="Forestry_Modern.lua",
-  mod="Forestry",
-  version="4.2.16.64",
-  network=true
-})
-if not ok then
-  io.stderr:write("BULDACITY Network unavailable: "..tostring(mode).."\n")
-end
-
+local ok,mode=Network.startClient("Forestry // Control Center",{controller="Forestry_Modern.lua",mod="Forestry",network=true})
+if not ok then io.stderr:write("BULDACITY Modern Network unavailable: "..tostring(mode).."\n") end
 dofile(shell.resolve("Forestry_Modern.lua"))
