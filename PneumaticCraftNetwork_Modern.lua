@@ -1,5 +1,6 @@
 -- PneumaticCraftNetwork_Modern.lua
-local netOk,net=pcall(require,"Network")
-if netOk and net and net.startClient then pcall(net.startClient,"PneumaticCraft",{screen="ACTIVE",controller="PneumaticCraft_Modern.lua",mod="PneumaticCraft",version="1.12.7-152"}) end
+local Network=require("network-modern.Network")
 local shell=require("shell")
+local ok,mode=Network.startClient("PneumaticCraft // Control Center",{controller="PneumaticCraft_Modern.lua",mod="PneumaticCraft",network=true})
+if not ok then io.stderr:write("BULDACITY Modern Network unavailable: "..tostring(mode).."\n") end
 dofile(shell.resolve("PneumaticCraft_Modern.lua"))
