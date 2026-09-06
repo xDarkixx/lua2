@@ -1,6 +1,7 @@
 -- ReactorBigReactors043A_Touch_Responsive.lua
--- BULDACITY Big Reactors 0.4.3A controller for OpenComputers 1.7.10
--- Touch + keyboard dashboard. Robust reactor-port diagnostics and rod readback.
+-- BULDACITY Big Reactors 0.4.3A / OpenComputers 1.7.10
+-- Repaired control-rod handling: 0-based rod indexes, no false getConnected gate,
+-- real API errors, readback verification and touch/keyboard controls.
 
 local component=require("component")
 local event=require("event")
@@ -15,6 +16,7 @@ local auto=false
 local running=true
 local message="BULDACITY REACTOR READY"
 local ui={}
+local lastRodCount=0
 
 local AUTO_ON=10
 local AUTO_OFF=90
@@ -28,17 +30,10 @@ local C={
   white=0xF3FAFF,grey=0x7D96AA,off=0x263541
 }
 
-local function safe(fn,...)
-  local ok,a,b,c,d=pcall(fn,...)
-  if ok then return a,b,c,d end
-end
-
--- Keep the real component error instead of hiding it behind "COMMAND FAILED".
 local function invoke(addr,name,...)
-  if not addr then return false,nil,"NO COMPONENT" end
+  if not addr then return false,nil,"NO br_reactor COMPONENT" end
   local ok,a,b,c,d=pcall(component.invoke,addr,name,...)
   if not ok then return false,nil,tostring(a) end
-  -- Some component implementations return nil,error instead of throwing.
   if a==nil and type(b)=="string" then return false,nil,b end
   return true,a,b,c,d
 end
@@ -103,40 +98,10 @@ local function hit(id,x,y)
 end
 
 local function say(s) message=fit(s,W-6) end
-
 local function reactorAddr() return reactors[selected] end
-
-local function scan()
-  reactors={}
-  for a in component.list("br_reactor") do reactors[#reactors+1]=a end
-  if #reactors==0 then
-    selected=1
-    rod=0
-    say("NO br_reactor DETECTED")
-  else
-    if selected>#reactors then selected=1 end
-    rod=0
-    local ok,connected,err=invoke(reactorAddr(),"getConnected")
-    if ok and connected==true then
-      say(#reactors.." REACTOR UNIT(S) // PORT CONNECTED")
-    elseif ok then
-      say(#reactors.." UNIT(S) // PORT NOT CONNECTED")
-    else
-      say(#reactors.." UNIT(S) // CONNECTION CHECK ERROR")
-    end
-  end
-end
 
 local function callReactor(name,...)
   return invoke(reactorAddr(),name,...)
-end
-
-local function connected()
-  if not reactorAddr() then return false,"NO br_reactor" end
-  local ok,v,err=callReactor("getConnected")
-  if not ok then return false,err end
-  if v~=true then return false,"REACTOR PORT NOT CONNECTED" end
-  return true,nil
 end
 
 local function read(name,default,...)
@@ -165,39 +130,66 @@ local function temperature()
   return tonumber(read("getFuelTemperature",0)) or 0
 end
 
+-- Big Reactors 0.4.3A uses zero-based control-rod indexes.
 local function rodCount()
-  return tonumber(read("getNumberOfControlRods",0)) or 0
+  local ok,v,err=callReactor("getNumberOfControlRods")
+  if not ok then return 0,err end
+  local n=tonumber(v) or 0
+  lastRodCount=n
+  return n,nil
 end
 
 local function rodLevel(i)
+  local n=lastRodCount
+  if n<=0 then n=rodCount() end
+  if n<=0 then return nil,"NO CONTROL RODS" end
+  i=math.floor(tonumber(i) or 0)
+  if i<0 or i>=n then return nil,"ROD INDEX OUT OF RANGE (0-"..(n-1)..")" end
   local ok,v,err=callReactor("getControlRodLevel",i)
   if not ok then return nil,err end
-  return tonumber(v),nil
+  v=tonumber(v)
+  if v==nil then return nil,"INVALID ROD LEVEL" end
+  return math.max(0,math.min(100,v)),nil
 end
 
 local function setActive(v)
-  local ok,_,err=callReactor("setActive",v)
+  local ok,_,err=callReactor("setActive",v==true)
   if ok then say(v and"REACTOR STARTED"or"REACTOR STOPPED")
   else say("REACTOR ERROR: "..fit(err,W-22)) end
 end
 
+-- IMPORTANT: do not use getConnected() as a write gate.
+-- The br_reactor component itself is the OpenComputers control-port interface.
+-- Some 0.4.3A/OC combinations report getConnected() unexpectedly while the
+-- normal reactor methods remain callable. The setter is therefore authoritative.
 local function setRod(i,v)
   local n=rodCount()
-  if n<=0 then say("NO CONTROL RODS") return false end
-  local okConn,connErr=connected()
-  if not okConn then say("ROD BLOCKED: "..fit(connErr,W-16)) return false end
+  if n<=0 then say("NO CONTROL RODS: "..fit(select(2,rodCount()),W-20)) return false end
   i=math.max(0,math.min(n-1,math.floor(tonumber(i) or 0)))
   v=math.max(0,math.min(100,math.floor(tonumber(v) or 0)))
-  local ok,_,err=callReactor("setControlRodLevel",i,v)
-  if not ok then
-    say("ROD "..i.." ERROR: "..fit(err,W-15))
+
+  -- Read first: this prevents a write to an invalid rod index.
+  local before,readErr=rodLevel(i)
+  if before==nil then
+    say("ROD "..i.." READ ERROR: "..fit(readErr,W-19))
     return false
   end
-  local actual,readErr=rodLevel(i)
+
+  local ok,ret,err=callReactor("setControlRodLevel",i,v)
+  if not ok then
+    say("ROD "..i.." SET ERROR: "..fit(err,W-21))
+    return false
+  end
+
+  local actual,verifyErr=rodLevel(i)
   rod=i
   if actual==nil then
-    say("ROD "..i.." SET "..v.."% // READBACK ERROR")
+    say("ROD "..i.." COMMAND OK // READBACK ERROR: "..fit(verifyErr,W-37))
     return true
+  end
+  if math.floor(actual)~=v then
+    say("ROD "..i.." MISMATCH: CMD "..v.."% / ACT "..math.floor(actual).."%")
+    return false
   end
   say("ROD "..i.." = "..math.floor(actual).."% // VERIFIED")
   return true
@@ -206,21 +198,35 @@ end
 local function setAllRods(v)
   local n=rodCount()
   if n<=0 then say("NO CONTROL RODS") return false end
-  local okConn,connErr=connected()
-  if not okConn then say("ALL RODS BLOCKED: "..fit(connErr,W-20)) return false end
   v=math.max(0,math.min(100,math.floor(tonumber(v) or 0)))
-  local ok,_,err=callReactor("setAllControlRodLevels",v)
+
+  local ok,ret,err=callReactor("setAllControlRodLevels",v)
   if not ok then
-    say("ALL RODS ERROR: "..fit(err,W-18))
+    say("ALL RODS SET ERROR: "..fit(err,W-22))
     return false
   end
-  local actual=rodLevel(rod)
-  if actual then
-    say("ALL RODS -> "..math.floor(actual).."% // VERIFIED")
-  else
-    say("ALL RODS -> "..v.."%")
+
+  local bad=0
+  local firstBad=nil
+  for i=0,n-1 do
+    local actual=rodLevel(i)
+    if actual==nil or math.floor(actual)~=v then
+      bad=bad+1
+      firstBad=firstBad or i
+    end
   end
+  if bad>0 then
+    say("ALL RODS MISMATCH: "..bad.." // FIRST ROD "..tostring(firstBad))
+    return false
+  end
+  say("ALL "..n.." RODS = "..v.."% // VERIFIED")
   return true
+end
+
+local function changeRod(delta)
+  local lv,err=rodLevel(rod)
+  if lv==nil then say("ROD READ ERROR: "..fit(err,W-17)) return end
+  setRod(rod,lv+delta)
 end
 
 local function copySelectedToAll()
@@ -229,10 +235,38 @@ local function copySelectedToAll()
   setAllRods(lv)
 end
 
-local function changeRod(delta)
-  local lv,err=rodLevel(rod)
-  if lv==nil then say("ROD READ ERROR: "..fit(err,W-17)) return end
-  setRod(rod,lv+delta)
+local function rodDiagnostics()
+  local n,err=rodCount()
+  if n<=0 then say("ROD DIAGNOSTIC FAILED: "..fit(err,W-25)) return end
+  local ok=0
+  for i=0,n-1 do
+    local lv=rodLevel(i)
+    if lv~=nil then ok=ok+1 end
+  end
+  say("ROD API OK // "..ok.."/"..n.." READABLE // INDEX 0.."..(n-1))
+end
+
+local function scan()
+  reactors={}
+  for a in component.list("br_reactor") do reactors[#reactors+1]=a end
+  if #reactors==0 then
+    selected=1;rod=0;lastRodCount=0
+    say("NO br_reactor DETECTED")
+    return
+  end
+  if selected>#reactors then selected=1 end
+  rod=0
+  local n,err=rodCount()
+  if n>0 then
+    local lv=rodLevel(0)
+    if lv~=nil then
+      say(#reactors.." REACTOR(S) // "..n.." CONTROL RODS // API READY")
+    else
+      say(#reactors.." REACTOR(S) // ROD READ ERROR: "..fit(err,W-36))
+    end
+  else
+    say(#reactors.." REACTOR(S) // NO CONTROL RODS")
+  end
 end
 
 local function changeUnit(delta)
@@ -254,29 +288,32 @@ local function tread(name,default,...)
   return default
 end
 
+local function turbineSet(name,...)
+  local a=turbineAddr()
+  if not a then say("NO br_turbine DETECTED") return false end
+  local ok,_,err=invoke(a,name,...)
+  if not ok then say("TURBINE ERROR: "..fit(err,W-18)) return false end
+  say("TURBINE // "..name.." OK")
+  return true
+end
+
 local function autoControl()
   if not auto or not reactorAddr() then return end
-  local okConn=connected()
-  if not okConn then return end
   local ep=energy()
   local _,fa=fuel()
   local temp=temperature()
   if fa<=AUTO_MIN_FUEL then
     if active() then setActive(false) end
-    say("AUTO SAFETY: FUEL LOW")
     return
   end
   if active() and temp>=AUTO_TEMP then
     setActive(false)
-    say("AUTO SAFETY: TEMP >= "..AUTO_TEMP.." C")
     return
   end
   if not active() and ep<AUTO_ON then
     setActive(true)
-    say("AUTO: LOW ENERGY -> START")
   elseif active() and ep>=AUTO_OFF then
     setActive(false)
-    say("AUTO: HIGH ENERGY -> STOP")
   end
 end
 
@@ -284,24 +321,24 @@ local function header(title)
   fill(1,1,W,4,C.panel)
   txt(3,1,"BULDACITY // BIG REACTORS 0.4.3A",C.cyan,C.panel)
   txt(3,2,title,C.white,C.panel)
-  local on=active()
-  led(math.max(5,W-22),2,on,on and C.green or C.red,on and"ONLINE"or"OFFLINE")
+  if reactorAddr() then led(math.max(5,W-22),2,active(),active() and C.green or C.red,active() and"ONLINE"or"OFFLINE") end
   rule(4,C.cyan)
 end
 
 local function footer()
   local y=math.max(6,H-4)
-  local n=7
+  ui={}
+  local labels={
+    {"reactor","CORE",C.cyan},{"rods","RODS",C.orange},{"turbine","TURBINE",C.pink},
+    {"prev","< UNIT",C.blue},{"next","UNIT >",C.blue},{"scan","SCAN",C.yellow},{"exit","EXIT",C.red}
+  }
   local gap=1
-  local bw=math.max(6,math.floor((W-4-(n-1)*gap)/n))
+  local bw=math.max(6,math.floor((W-4-(#labels-1)*gap)/#labels))
   local x=2
-  button("reactor",x,y,bw,"CORE",C.cyan,page=="reactor");x=x+bw+gap
-  button("rods",x,y,bw,"RODS",C.orange,page=="rods");x=x+bw+gap
-  button("turbine",x,y,bw,"TURBINE",C.pink,page=="turbine");x=x+bw+gap
-  button("prev",x,y,bw,"< UNIT",C.blue);x=x+bw+gap
-  button("next",x,y,bw,"UNIT >",C.blue);x=x+bw+gap
-  button("scan",x,y,bw,"SCAN",C.yellow);x=x+bw+gap
-  button("exit",x,y,bw,"EXIT",C.red)
+  for _,b in ipairs(labels) do
+    button(b[1],x,y,bw,b[2],b[3],page==b[1])
+    x=x+bw+gap
+  end
   txt(2,H,"[Q] EXIT [1] CORE [2] RODS [3] TURBINE [A] AUTO [UP/DOWN] ROD",C.grey,C.bg)
 end
 
@@ -310,214 +347,175 @@ local function drawReactor()
   local y=6
   local h=H-11
   local gap=2
-  local pw=math.floor((W-6-gap)/2)
+  local pw=math.max(18,math.floor((W-6-gap)/2))
   local x1=3
   local x2=x1+pw+gap
   panel(x1,y,pw,h,"REACTOR",C.cyan)
   panel(x2,y,pw,h,"POWER CONTROL",C.purple)
-  if #reactors==0 then
+  if not reactorAddr() then
     txt(x1+3,y+4,"NO br_reactor FOUND",C.red,C.panel)
-    txt(x1+3,y+6,"Attach a Big Reactors reactor",C.grey,C.panel)
-    txt(x1+3,y+7,"to the OpenComputers network.",C.grey,C.panel)
   else
-    local ep,en,em=energy()
-    local fp,fa,fm=fuel()
+    local ep,en=energy()
+    local fp,fa=fuel()
     local temp=temperature()
-    local isConn,connErr=connected()
-    local cool=read("isActivelyCooled",false)==true
-    txt(x1+3,y+2,"UNIT",C.grey,C.panel)
-    txt(x1+17,y+2,selected.." / "..#reactors,C.white,C.panel)
-    led(x1+3,y+4,isConn,C.green,isConn and"PORT CONNECTED"or"PORT OFFLINE")
-    if not isConn then txt(x1+3,y+5,fit(connErr,pw-6),C.red,C.panel) end
+    local n=lastRodCount>0 and lastRodCount or rodCount()
+    txt(x1+3,y+2,"UNIT",C.grey,C.panel);txt(x1+17,y+2,selected.." / "..#reactors,C.white,C.panel)
+    led(x1+3,y+4,true,C.green,"br_reactor COMPONENT")
     led(x1+3,y+7,active(),C.green,active() and"REACTOR ONLINE"or"REACTOR OFFLINE")
     led(x1+3,y+9,auto,C.purple,auto and"AUTO ENABLED"or"AUTO DISABLED")
-    led(x1+3,y+11,cool,C.cyan,cool and"ACTIVE COOLING"or"PASSIVE COOLING")
-    txt(x1+3,y+13,"ENERGY",C.grey,C.panel)
-    txt(x1+17,y+13,string.format("%.1f %%",ep),ep<10 and C.red or(ep>=90 and C.green or C.cyan),C.panel)
-    bar(x1+3,y+14,pw-6,ep,ep<10 and C.red or(ep>=90 and C.green or C.cyan))
-    txt(x1+3,y+16,"STORED",C.grey,C.panel)
-    txt(x1+17,y+16,math.floor(en).." RF",C.white,C.panel)
-    txt(x1+3,y+18,"FUEL",C.grey,C.panel)
-    txt(x1+17,y+18,string.format("%.1f %%",fp),C.yellow,C.panel)
-    bar(x1+3,y+19,pw-6,fp,C.yellow)
-    txt(x1+3,y+21,"TEMP",C.grey,C.panel)
-    txt(x1+17,y+21,math.floor(temp).." C",temp>=AUTO_TEMP and C.red or C.orange,C.panel)
+    txt(x1+3,y+12,"ENERGY",C.grey,C.panel);txt(x1+17,y+12,string.format("%.1f %%",ep),C.cyan,C.panel)
+    bar(x1+3,y+13,pw-6,ep,C.cyan)
+    txt(x1+3,y+15,"STORED",C.grey,C.panel);txt(x1+17,y+15,math.floor(en).." RF",C.white,C.panel)
+    txt(x1+3,y+17,"FUEL",C.grey,C.panel);txt(x1+17,y+17,string.format("%.1f %%",fp),C.yellow,C.panel)
+    bar(x1+3,y+18,pw-6,fp,C.yellow)
+    txt(x1+3,y+20,"TEMP",C.grey,C.panel);txt(x1+17,y+20,math.floor(temp).." C",temp>=AUTO_TEMP and C.red or C.orange,C.panel)
+    txt(x1+3,y+22,"RODS",C.grey,C.panel);txt(x1+17,y+22,n.." // SELECTED "..rod,C.orange,C.panel)
   end
+
   local ep=energy()
   txt(x2+3,y+2,"AUTO THRESHOLDS",C.white,C.panel)
   txt(x2+3,y+4,"START",C.grey,C.panel);txt(x2+18,y+4,"< "..AUTO_ON.." %",C.red,C.panel)
   txt(x2+3,y+6,"STOP",C.grey,C.panel);txt(x2+18,y+6,">= "..AUTO_OFF.." %",C.green,C.panel)
   txt(x2+3,y+8,"CURRENT",C.grey,C.panel);txt(x2+18,y+8,string.format("%.1f %%",ep),C.cyan,C.panel)
   bar(x2+3,y+9,pw-6,ep,C.cyan)
-  led(x2+3,y+12,auto and ep<AUTO_ON,C.red,"LOW POWER START")
-  led(x2+3,y+14,auto and ep>=AUTO_OFF,C.green,"HIGH POWER STOP")
-  txt(x2+3,y+17,"SAFE TEMP",C.grey,C.panel);txt(x2+18,y+17,"< "..AUTO_TEMP.." C",C.orange,C.panel)
-  button("start",x2+3,y+20,math.floor((pw-7)/2),"START",C.green)
-  button("stop",x2+5+math.floor((pw-7)/2),y+20,math.floor((pw-7)/2),"STOP",C.red)
-  button("auto",x2+3,y+22,pw-6,"AUTO: "..(auto and"ON"or"OFF"),C.purple,auto)
-  footer()
-  txt(3,H-5,fit(message,W-6),C.yellow,C.bg)
+  button("start",x2+3,y+12,math.max(8,math.floor((pw-8)/2)),"START",C.green)
+  button("stop",x2+5+math.floor((pw-8)/2),y+12,math.max(8,math.floor((pw-8)/2)),"STOP",C.red)
+  button("auto",x2+3,y+15,pw-6,auto and"AUTO: ON"or"AUTO: OFF",C.purple,auto)
+  button("diag",x2+3,y+18,pw-6,"ROD API DIAGNOSTIC",C.orange)
+  txt(x2+3,y+21,"STATUS",C.grey,C.panel)
+  txt(x2+3,y+22,fit(message,pw-6),C.white,C.panel)
 end
 
 local function drawRods()
-  header("CONTROL RODS // VERIFIED TOUCH CONTROL")
+  header("CONTROL RODS // DIRECT API + READBACK")
   local y=6
   local h=H-11
   local w=W-6
-  panel(3,y,w,h,"ROD MATRIX",C.orange)
-  local n=rodCount()
-  local isConn,connErr=connected()
-  if n<=0 then
-    txt(7,y+4,"NO CONTROL RODS DETECTED",C.red,C.panel)
-  else
-    txt(7,y+2,"PORT",C.grey,C.panel)
-    txt(13,y+2,isConn and"CONNECTED"or fit(connErr,25),isConn and C.green or C.red,C.panel)
-    local cols=math.min(4,n)
-    local rows=math.ceil(n/cols)
-    local cw=math.max(8,math.floor((w-6-(cols-1)*2)/cols))
-    for i=0,n-1 do
-      local col=i%cols
-      local row=math.floor(i/cols)
-      local x=6+col*(cw+2)
-      local yy=y+4+row*3
-      local lv,err=rodLevel(i)
-      lv=lv or 0
-      button("rod"..i,x,yy,cw,"R"..i.." "..math.floor(lv).."%",i==rod and C.white or C.orange,i==rod)
-      bar(x,yy+2,cw,lv,i==rod and C.cyan or C.orange)
-    end
-    local controlsY=math.max(y+7,math.min(H-7,y+6+rows*3))
-    local bw=math.max(8,math.floor((w-10)/6))
-    local bx=6
-    button("m10",bx,controlsY,bw,"-10",C.red);bx=bx+bw+1
-    button("m5",bx,controlsY,bw,"-5",C.red);bx=bx+bw+1
-    button("m1",bx,controlsY,bw,"-1",C.orange);bx=bx+bw+1
-    button("p1",bx,controlsY,bw,"+1",C.green);bx=bx+bw+1
-    button("p5",bx,controlsY,bw,"+5",C.green);bx=bx+bw+1
-    button("p10",bx,controlsY,bw,"+10",C.green)
-    local copyY=math.min(H-5,controlsY+3)
-    button("copy",6,copyY,18,"COPY -> ALL",C.blue)
-    button("all0",26,copyY,12,"ALL 0",C.blue)
-    button("all50",40,copyY,12,"ALL 50",C.yellow)
-    button("all100",54,copyY,12,"ALL 100",C.purple)
+  panel(3,y,w,h,"CONTROL ROD ARRAY",C.orange)
+  if not reactorAddr() then
+    txt(6,y+4,"NO REACTOR",C.red,C.panel);return
   end
-  footer()
-  txt(3,H-5,fit(message,W-6),C.yellow,C.bg)
+  local n=rodCount()
+  if n<=0 then
+    txt(6,y+4,"NO CONTROL RODS / API ERROR",C.red,C.panel);return
+  end
+  txt(6,y+2,"ROD ",C.grey,C.panel);txt(13,y+2,tostring(rod),C.orange,C.panel)
+  local lv,err=rodLevel(rod)
+  if lv then
+    txt(18,y+2,string.format("LEVEL %d%%",math.floor(lv)),C.white,C.panel)
+    bar(30,y+2,math.max(10,w-33),lv,C.orange)
+  else txt(18,y+2,fit(err,w-18),C.red,C.panel) end
+
+  local cols=math.min(4,math.max(1,math.floor((W-8)/18)))
+  local bw=math.floor((w-6-(cols-1)*2)/cols)
+  for i=0,n-1 do
+    local col=i%cols
+    local row=math.floor(i/cols)
+    local bx=6+col*(bw+2)
+    local by=y+5+row*3
+    if by+1<H-6 then
+      local rlv=rodLevel(i)
+      button("rod"..i,bx,by,bw,string.format("R%02d %3d%%",i,math.floor(rlv or 0)),C.orange,i==rod)
+    end
+  end
+  local cy=math.min(H-8,y+8+math.ceil(n/cols)*3)
+  button("minus10",6,cy,8,"-10",C.red)
+  button("minus5",15,cy,8,"-5",C.red)
+  button("minus1",24,cy,8,"-1",C.red)
+  button("plus1",33,cy,8,"+1",C.green)
+  button("plus5",42,cy,8,"+5",C.green)
+  button("plus10",51,cy,8,"+10",C.green)
+  button("copy",60,cy,12,"COPY -> ALL",C.cyan)
+  button("all0",6,cy+3,12,"ALL 0%",C.blue)
+  button("all50",19,cy+3,12,"ALL 50%",C.yellow)
+  button("all100",32,cy+3,12,"ALL 100%",C.red)
+  button("diag",45,cy+3,15,"DIAGNOSTIC",C.orange)
+  txt(6,H-6,fit(message,W-12),C.white,C.bg)
 end
 
 local function drawTurbine()
-  header("TURBINE // LIVE TELEMETRY")
+  header("TURBINE // br_turbine")
   local y=6
   local h=H-11
-  local w=W-6
-  panel(3,y,w,h,"TURBINE",C.pink)
+  panel(3,y,W-6,h,"TURBINE TELEMETRY",C.pink)
   local a=turbineAddr()
-  if not a then
-    txt(7,y+4,"NO br_turbine FOUND",C.red,C.panel)
-    txt(7,y+6,"Attach a Big Reactors turbine",C.grey,C.panel)
-    txt(7,y+7,"to view live telemetry.",C.grey,C.panel)
-  else
-    local on=tread("getActive",false)==true
-    local rpm=tonumber(tread("getRotorSpeed",0)) or 0
-    local out=tonumber(tread("getEnergyProducedLastTick",0)) or 0
-    local flow=tonumber(tread("getFluidFlowRate",0)) or 0
-    local ind=tread("getInductorEngaged",false)==true
-    local two=math.floor((w-9)/2)
-    local x1=6
-    local x2=6+two+3
-    led(x1,y+3,on,C.green,on and"TURBINE ONLINE"or"TURBINE OFFLINE")
-    led(x2,y+3,ind,C.purple,ind and"INDUCTOR ENGAGED"or"INDUCTOR OPEN")
-    txt(x1,y+6,"ROTOR SPEED",C.grey,C.panel);txt(x1+18,y+6,string.format("%.1f RPM",rpm),C.cyan,C.panel)
-    bar(x1,y+7,two,math.min(100,rpm/1800*100),C.cyan)
-    txt(x2,y+6,"OUTPUT",C.grey,C.panel);txt(x2+15,y+6,math.floor(out).." RF/t",C.green,C.panel)
-    txt(x1,y+10,"FLUID FLOW",C.grey,C.panel);txt(x1+18,y+10,math.floor(flow).." mB/t",C.yellow,C.panel)
-    txt(x2,y+10,"COMPONENT",C.grey,C.panel);txt(x2+15,y+10,fit(a,18),C.white,C.panel)
-    button("tstart",6,y+16,16,"START",C.green)
-    button("tstop",24,y+16,16,"STOP",C.red)
-    button("tind",42,y+16,20,"INDUCTOR",C.purple,ind)
-  end
-  footer()
-  txt(3,H-5,fit(message,W-6),C.yellow,C.bg)
+  if not a then txt(6,y+4,"NO br_turbine DETECTED",C.red,C.panel);return end
+  local on=tread("getActive",false)==true
+  local rpm=tonumber(tread("getRotorSpeed",0)) or 0
+  local rf=tonumber(tread("getEnergyProducedLastTick",0)) or 0
+  local flow=tonumber(tread("getFluidFlowRate",0)) or 0
+  local coils=tread("getInductorEngaged",false)==true
+  led(6,y+3,on,C.green,on and"TURBINE ONLINE"or"TURBINE OFFLINE")
+  txt(6,y+6,"ROTOR",C.grey,C.panel);txt(20,y+6,math.floor(rpm).." RPM",C.cyan,C.panel)
+  txt(6,y+8,"OUTPUT",C.grey,C.panel);txt(20,y+8,math.floor(rf).." RF/t",C.green,C.panel)
+  txt(6,y+10,"FLOW",C.grey,C.panel);txt(20,y+10,math.floor(flow).." mB/t",C.blue,C.panel)
+  txt(6,y+12,"COILS",C.grey,C.panel);txt(20,y+12,coils and"ENGAGED"or"DISENGAGED",coils and C.yellow or C.grey,C.panel)
+  button("ton",6,y+15,18,"TURBINE ON",C.green,on)
+  button("toff",26,y+15,18,"TURBINE OFF",C.red,not on)
+  button("con",46,y+15,18,"COILS ON",C.yellow,coils)
+  button("coff",66,y+15,18,"COILS OFF",C.blue,not coils)
+  txt(6,H-6,fit(message,W-12),C.white,C.bg)
 end
 
 local function draw()
-  ui={}
-  gpu.setBackground(C.bg)
-  gpu.fill(1,1,W,H," ")
-  if page=="reactor" then drawReactor()
-  elseif page=="rods" then drawRods()
-  else drawTurbine() end
+  gpu.setBackground(C.bg);gpu.setForeground(C.white);gpu.fill(1,1,W,H," ")
+  if page=="rods" then drawRods()
+  elseif page=="turbine" then drawTurbine()
+  else drawReactor() end
+  footer()
 end
 
-local function resize()
-  local mw,mh=safe(gpu.maxResolution)
-  if mw and mh then safe(gpu.setResolution,mw,mh) end
-  W,H=gpu.getResolution()
-end
-
-local function action(id)
-  if id=="reactor" then page="reactor"
-  elseif id=="rods" then page="rods"
-  elseif id=="turbine" then page="turbine"
-  elseif id=="prev" then changeUnit(-1)
-  elseif id=="next" then changeUnit(1)
-  elseif id=="scan" then scan()
-  elseif id=="exit" then running=false
-  elseif id=="start" then setActive(true)
-  elseif id=="stop" then setActive(false)
-  elseif id=="auto" then auto=not auto;say("AUTO "..(auto and"ENABLED"or"DISABLED"))
-  elseif id=="m10" then changeRod(-10)
-  elseif id=="m5" then changeRod(-5)
-  elseif id=="m1" then changeRod(-1)
-  elseif id=="p1" then changeRod(1)
-  elseif id=="p5" then changeRod(5)
-  elseif id=="p10" then changeRod(10)
-  elseif id=="copy" then copySelectedToAll()
-  elseif id=="all0" then setAllRods(0)
-  elseif id=="all50" then setAllRods(50)
-  elseif id=="all100" then setAllRods(100)
-  elseif id=="tstart" then
-    local ok,_,err=invoke(turbineAddr(),"setActive",true);say(ok and"TURBINE START"or("TURBINE ERROR: "..tostring(err)))
-  elseif id=="tstop" then
-    local ok,_,err=invoke(turbineAddr(),"setActive",false);say(ok and"TURBINE STOP"or("TURBINE ERROR: "..tostring(err)))
-  elseif id=="tind" then
-    local ok,_,err=invoke(turbineAddr(),"setInductorEngaged",not tread("getInductorEngaged",false));say(ok and"INDUCTOR TOGGLED"or("INDUCTOR ERROR: "..tostring(err)))
-  elseif id:sub(1,3)=="rod" then
-    rod=tonumber(id:sub(4)) or rod
-    local lv=rodLevel(rod)
-    say("SELECTED ROD "..rod..(lv and(" // "..math.floor(lv).."%")or""))
+local function click(x,y)
+  if hit("reactor",x,y) then page="reactor";return end
+  if hit("rods",x,y) then page="rods";return end
+  if hit("turbine",x,y) then page="turbine";return end
+  if hit("prev",x,y) then changeUnit(-1);return end
+  if hit("next",x,y) then changeUnit(1);return end
+  if hit("scan",x,y) then scan();return end
+  if hit("exit",x,y) then running=false;return end
+  if hit("start",x,y) then setActive(true);return end
+  if hit("stop",x,y) then setActive(false);return end
+  if hit("auto",x,y) then auto=not auto;say(auto and"AUTO ENABLED"or"AUTO DISABLED");return end
+  if hit("diag",x,y) then rodDiagnostics();return end
+  if hit("minus10",x,y) then changeRod(-10);return end
+  if hit("minus5",x,y) then changeRod(-5);return end
+  if hit("minus1",x,y) then changeRod(-1);return end
+  if hit("plus1",x,y) then changeRod(1);return end
+  if hit("plus5",x,y) then changeRod(5);return end
+  if hit("plus10",x,y) then changeRod(10);return end
+  if hit("copy",x,y) then copySelectedToAll();return end
+  if hit("all0",x,y) then setAllRods(0);return end
+  if hit("all50",x,y) then setAllRods(50);return end
+  if hit("all100",x,y) then setAllRods(100);return end
+  if hit("ton",x,y) then turbineSet("setActive",true);return end
+  if hit("toff",x,y) then turbineSet("setActive",false);return end
+  if hit("con",x,y) then turbineSet("setInductorEngaged",true);return end
+  if hit("coff",x,y) then turbineSet("setInductorEngaged",false);return end
+  for i=0,lastRodCount-1 do
+    if hit("rod"..i,x,y) then rod=i;say("SELECTED ROD "..i);return end
   end
 end
 
 scan()
-resize()
-draw()
-
 while running do
-  local e={event.pull(0.25)}
-  if e[1]=="touch" then
-    local x,y=e[3],e[4]
-    for id in pairs(ui) do
-      if hit(id,x,y) then action(id);break end
+  local ev={event.pull(0.5)}
+  if ev[1]=="touch" then click(ev[3],ev[4])
+  elseif ev[1]=="key_down" then
+    local char,code=ev[3],ev[4]
+    if char==113 or char==81 then running=false
+    elseif char==49 then page="reactor"
+    elseif char==50 then page="rods"
+    elseif char==51 then page="turbine"
+    elseif char==97 or char==65 then auto=not auto;say(auto and"AUTO ENABLED"or"AUTO DISABLED")
+    elseif page=="rods" and code==200 then changeRod(5)
+    elseif page=="rods" and code==208 then changeRod(-5)
+    elseif page=="rods" and code==201 then changeRod(10)
+    elseif page=="rods" and code==209 then changeRod(-10)
     end
-  elseif e[1]=="key_down" then
-    local code=e[4]
-    if code==16 then running=false
-    elseif code==2 then page="reactor"
-    elseif code==3 then page="rods"
-    elseif code==4 then page="turbine"
-    elseif code==30 then auto=not auto;say("AUTO "..(auto and"ENABLED"or"DISABLED"))
-    elseif code==200 then changeRod(5)
-    elseif code==208 then changeRod(-5)
-    elseif code==203 then changeUnit(-1)
-    elseif code==205 then changeUnit(1)
-    elseif code==28 then setActive(not active()) end
-  elseif e[1]=="screen_resized" then
-    resize()
   end
   autoControl()
   draw()
 end
 
-gpu.setBackground(0x000000)
-gpu.fill(1,1,W,H," ")
-txt(3,3,"BULDACITY REACTOR CONTROLLER STOPPED",C.cyan,0x000000)
+gpu.setBackground(0x000000);gpu.setForeground(0xFFFFFF);gpu.fill(1,1,W,H," ")
+txt(3,3,"BULDACITY REACTOR CONTROLLER STOPPED",C.cyan,C.bg)
