@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """BULDACITY Tier-3 remote gateway (Python 3, stdlib only).
-
-Keep this service bound to localhost and expose it through a VPN/SSH tunnel.
-The gateway itself never exposes OpenComputers modem ports to the Internet.
-"""
+Keep this service on localhost and expose it through a VPN/SSH tunnel."""
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlparse,parse_qs
 import json,os,secrets,time
@@ -12,8 +9,7 @@ TOKEN=os.environ.get("BULDACITY_TOKEN")
 if not TOKEN:
     if os.path.exists(TOKEN_FILE): TOKEN=open(TOKEN_FILE,"r",encoding="utf-8").read().strip()
     else:
-        TOKEN=secrets.token_urlsafe(32)
-        with open(TOKEN_FILE,"w",encoding="utf-8") as f:f.write(TOKEN+"\n")
+        TOKEN=secrets.token_urlsafe(32);open(TOKEN_FILE,"w",encoding="utf-8").write(TOKEN+"\n")
         try: os.chmod(TOKEN_FILE,0o600)
         except OSError: pass
 state={"server":"TIER3-CORE","updated":0,"nodes":{},"relays":{},"stats":{}};commands=[]
@@ -29,6 +25,11 @@ class Handler(BaseHTTPRequestHandler):
         if not auth(q): self.reply({"ok":False,"error":"UNAUTHORIZED"},401);return
         if u.path=="/api/status": self.reply({"ok":True,**state});return
         if u.path=="/api/poll": self.reply({"ok":True,"command":commands.pop(0) if commands else None});return
+        if u.path=="/bridge/poll":
+            c=commands.pop(0) if commands else None
+            if not c: self.reply(b"NOOP\n",200,"text/plain");return
+            value="" if c.get("value") is None else str(c.get("value")).replace("|","/").replace("\n"," ")
+            self.reply(("COMMAND|%s|%s|%s|%s\n"%(c["id"],c["destination"],c["action"],value)).encode(),200,"text/plain");return
         if u.path=="/":
             page="""<!doctype html><meta charset=utf-8><title>BULDACITY TIER-3</title><style>body{font-family:system-ui;background:#090d14;color:#e9eef5;margin:0}main{max-width:1100px;margin:auto;padding:28px}.card{background:#111827;border:1px solid #263244;border-radius:14px;padding:18px;margin:12px 0}input,button{padding:10px;border-radius:8px;border:1px solid #334155;background:#0b1220;color:#fff;margin:3px}button{cursor:pointer}pre{white-space:pre-wrap}</style><main><div class=card><h1>BULDACITY TIER-3</h1><div id=s>Loading...</div></div><div class=card><h2>Remote Command</h2><input id=d placeholder=Destination><input id=a placeholder=Action><input id=v placeholder=Value><button onclick=send()>Send</button><pre id=o></pre></div></main><script>const token=new URLSearchParams(location.search).get('token')||prompt('Tier-3 Token');async function load(){let r=await fetch('/api/status?token='+encodeURIComponent(token));let j=await r.json();s.innerHTML='<b>Server:</b> '+j.server+'<br><b>Nodes:</b> '+Object.keys(j.nodes||{}).length+'<br><b>Relays:</b> '+Object.keys(j.relays||{}).length+'<br><b>Updated:</b> '+j.updated}async function send(){let r=await fetch('/api/command?token='+encodeURIComponent(token),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination:d.value,action:a.value,value:v.value})});o.textContent=await r.text()}load();setInterval(load,3000)</script>"""
             self.reply(page.encode(),200,"text/html");return
@@ -38,8 +39,8 @@ class Handler(BaseHTTPRequestHandler):
         u=urlparse(self.path);q=parse_qs(u.query)
         if not auth(q): self.reply({"ok":False,"error":"UNAUTHORIZED"},401);return
         n=min(int(self.headers.get("Content-Length","0")),65536);raw=self.rfile.read(n)
-        try: data=json.loads(raw.decode())
-        except Exception: self.reply({"ok":False,"error":"INVALID_JSON"},400);return
+        try:data=json.loads(raw.decode())
+        except Exception:self.reply({"ok":False,"error":"INVALID_JSON"},400);return
         if u.path=="/api/status":
             if isinstance(data,dict): state.update(data);state["updated"]=time.time()
             self.reply({"ok":True});return
