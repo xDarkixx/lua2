@@ -1,0 +1,45 @@
+{
+	--legacy
+	{"admox_installer","0.1.4","https://gitlab.com/d_rzepka/oc-equipment/raw/master/archive/admox_installer.lua","Legacy installer","IlynPayne",nil,nil,nil,nil,true},
+	{"sgcx-legacy","0.3.7","https://gitlab.com/d_rzepka/oc-equipment/raw/510b45f30f5361f5bd0308d815fbce79413f0168/stargate/sgcx.lua","legacy vesion of the stargate controller (for 2 tier screens)","IlynPayne",{"gml"},nil,nil,nil,true},
+	{"irisAuth-legacy","1.7","https://gitlab.com/d_rzepka/oc-equipment/raw/510b45f30f5361f5bd0308d815fbce79413f0168/stargate/irisAuth.lua","Legacy version of the iris authentication program (for use with sgcx-legacy)","IlynPayne",nil,nil,nil,nil,true},
+	{"data_server","0.2.0beta","https://gitlab.com/d_rzepka/oc-equipment/raw/master/archive/data_server.lua","Old version of the data server","IlynPayne",{"rtpo"},nil,nil,nil,true},
+	{"the_guard_legacy","1.0","https://gitlab.com/d_rzepka/oc-equipment/raw/master/archive/the_guard_legacy.lua","Old version of the_guard","IlynPayne",{"gml","hdp","dsapi"},nil,nil,nil,true},
+	{"micro","1","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/micro.lua","the_guard microcontroller (1.x)","IlynPayne",{"hdp","dsapi"},nil,nil,nil,true},
+	{"ds-manager","1.1","https://gitlab.com/d_rzepka/oc-equipment/raw/master/archive/ds-manager.lua","Legacy version of the data manager","IlynPayne",{"ds-api"},nil,nil,nil,true},
+	--library
+	{"rtpo","2.0","https://gitlab.com/d_rzepka/oc-equipment/raw/master/archive/rtpo.lua","Network protocol","IlynPayne",nil,true,nil,nil,true},
+	{"ds-api","1.3","https://gitlab.com/d_rzepka/oc-equipment/raw/master/archive/ds-api.lua","Data server API","IlynPayne",{"rtpo"},nil,nil,nil,true},
+	{"gml","1.2.5","https://gitlab.com/d_rzepka/oc-equipment/raw/master/lib/gml.lua","GUI library","Gopher",{"gfxbuffer","default-style"},true,nil,nil},
+	{"gfxbuffer","none","https://gitlab.com/d_rzepka/oc-equipment/raw/master/lib/gfxbuffer.lua","GML dependency","Gopher",nil,true,nil,nil},
+	{"colorutils","none","https://gitlab.com/d_rzepka/oc-equipment/raw/master/lib/colorutils.lua","Color conversion tools (old dependency of gfxbuffer, currently not used)","Gopher",nil,true,nil,nil},
+	{"default-style","none","https://gitlab.com/d_rzepka/oc-equipment/raw/master/lib/default.gss","Default GML theme","Gopher",nil,true,nil,"default.gss"},
+	{"dark-style","none","https://gitlab.com/d_rzepka/oc-equipment/raw/master/lib/dark.gss","Dark GML theme","IlynPayne",nil,true,nil,"dark.gss"},
+	{"hdp","2.1","https://gitlab.com/d_rzepka/oc-equipment/raw/master/lib/hdp.lua","Network protocol (better version)","IlynPayne",nil,true,nil,nil},
+	{"dsapi","2.3","https://gitlab.com/d_rzepka/oc-equipment/raw/master/lib/dsapi.lua","Data server API","IlynPayne",{"hdp"},true,nil,nil},
+	{"support_v1","1.2","https://gitlab.com/d_rzepka/oc-equipment/raw/master/lib/support_v1.lua","Support library v1","IlynPayne",nil,true,nil,nil},
+	{"color_grid","2.0","https://gitlab.com/d_rzepka/oc-equipment/raw/master/lib/color_grid.lua","LIbrary for simple drawings","IlynPayne",nil,true,nil,nil},
+	--programs
+	{"sgcx","0.7.1","https://gitlab.com/d_rzepka/oc-equipment/raw/master/stargate/sgcx.lua","Stargate controller","IlynPayne",{"gml","gfxbuffer","default-style","dark-style", "support_v1", "color_grid", "sgcx_graphics"},nil,nil,nil},
+	{"irisAuth","1.8","https://gitlab.com/d_rzepka/oc-equipment/raw/master/stargate/irisAuth.lua","Remote iris authenticator for stargate controller","IlynPayne",nil,nil,nil,nil},
+	{"sgcx_graphics","1.0","https://gitlab.com/d_rzepka/oc-equipment/raw/master/stargate/sgcx_graphics.lua","SGCX graphics library","IlynPayne",nil,true,nil,nil},
+	{"geo_analyzer","1.3","https://gitlab.com/d_rzepka/oc-equipment/raw/master/misc/geo_analyzer.lua","Terrain scanner","IlynPayne",nil,nil,nil,nil},
+	{"projector","1.0","https://gitlab.com/d_rzepka/oc-equipment/raw/master/misc/projector.lua","Terrain stan projector","IlynPayne",nil,nil,nil,nil},
+	{"dataSrv2","2.4","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/dataSrv2.lua","Data server","IlynPayne",{"hdp"},nil,nil,nil},
+	{"dsman","1.0","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/dsman.lua","Menedżer serwera danych","IlynPayne",{"hdp","dsapi"},nil,nil,nil},
+	{"the_switch","1.1","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/the_switch.lua","Switch server (redstone control)","IlynPayne",{"gml","gfxbuffer","default-style","hdp","dsapi"},nil,nil,nil},
+	{"switchRemote","1.0","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/switchRemote.lua","Remote for the_switch","IlynPayne",nil,nil,nil,nil},
+	{"the_guard","2.3.2","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/the_guard.lua","Complex security system","IlynPayne",{"gml","dsapi","logs","levels","auth","io","turrets"},nil,nil,nil},
+	{"logs","1.2","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/mod_tg/mod_tg_logs.lua","Log module for the_guard","IlynPayne",nil,nil,nil,"mod_tg/mod_tg_logs.lua"},
+	{"levels","1.1","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/mod_tg/mod_tg_levels.lua","Security levels module for the_guard","IlynPayne",nil,nil,nil,"mod_tg/mod_tg_levels.lua"},
+	{"auth","1.2.3","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/mod_tg/mod_tg_auth.lua","Card readers and keypads module for the_guard","IlynPayne",nil,nil,nil,"mod_tg/mod_tg_auth.lua"},
+	{"io","1.1","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/mod_tg/mod_tg_io.lua","Redstone control module for the_guard","IlynPayne",nil,nil,nil,"mod_tg/mod_tg_io.lua"},
+	{"turrets","1.3.7","https://gitlab.com/d_rzepka/oc-equipment/raw/master/servers/mod_tg/mod_tg_turrets.lua","Turrets and sensors module for the_guard","IlynPayne",nil,nil,nil,"mod_tg/mod_tg_turrets.lua"},
+	-- utils
+	{"tg2_decrypt","1.0","https://gitlab.com/d_rzepka/oc-equipment/raw/master/util/tg2_decrypt.lua","The Guard 2 config file decryptor","IlynPayne",nil,nil,nil,nil},
+	--3rd party
+	{"OpenReactor","1.0","https://gitlab.com/d_rzepka/oc-equipment/raw/master/misc/OpenReactor.lua","Big reactors controller","2016mfransen",nil,nil,nil,nil},
+	{"TitanBIOS","1.0","https://gitlab.com/d_rzepka/oc-equipment/raw/master/misc/titanbios.lua","Boot over HTTP","Lyra",nil,nil,nil,nil},
+	{"hologram-editor","0.60 Beta","https://gitlab.com/d_rzepka/oc-equipment/raw/master/misc/hologram-editor.lua","Hologram editor","MoonlightOwl",nil,nil,nil,nil},
+	{"hologram-viewer","0.60 Beta","https://gitlab.com/d_rzepka/oc-equipment/raw/master/misc/hologram-viewer.lua","Hologram viewer","MoonlightOwl",nil,nil,nil,nil}
+}
