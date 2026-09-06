@@ -24,25 +24,19 @@ function M.status()local s=Modern.status();local c=M.componentCheck();for k,v in
 function M.getDiagnostics()local r={};for a,d in pairs(M.diagnostics)do r[a]=d end;for a,d in pairs(Registry.all())do r[a]=d end;return r end
 local function legacy(p)local d=p and(p.payload or p.data)or{};return{protocol=M.PROTOCOL,kind=p and(p.type or p.kind),type=p and(p.type or p.kind),sender=p and(p.source or p.sender),source=p and p.source,destination=p and p.destination,id=p and p.id,hops=p and p.hops,ttl=p and p.ttl,time=computer.uptime(),data=d,payload=d,senderAddress=p and p.source}end
 
--- Remote screen snapshot support. OpenComputers exposes the character/color
--- cells through gpu.get(x,y); we send small row chunks through UI_FRAME so the
--- browser can reconstruct the same terminal surface without changing a Modern controller.
+-- Remote screen snapshot support. OpenComputers exposes character/color cells
+-- through gpu.get(x,y). Rows are sent separately to stay below packet limits.
 local function sendScreen(target)
  if not target or not component.isAvailable("gpu") then return false,"NO_GPU" end
  local g=component.gpu;local sw,sh=g.getResolution();local w=math.min(sw,80);local h=math.min(sh,40)
- local rows={}
  for y=1,h do
    local cells={}
    for x=1,w do
      local ok,ch,fg,bg=pcall(g.get,x,y)
      if ok then cells[x]={ch or " ",fg or 0xFFFFFF,bg or 0} else cells[x]={" ",0xFFFFFF,0} end
    end
-   rows[#rows+1]={y=y,cells=cells}
-   if #rows>=2 or y==h then
-     local ok=Modern.send("UI_FRAME",target,{kind="TEXT_SCREEN",nodeId=addr(),width=w,height=h,rows=rows},target)
-     if not ok then return false,"UI_SEND_FAILED" end
-     rows={}
-   end
+   local ok=Modern.send("UI_FRAME",target,{kind="TEXT_SCREEN",nodeId=addr(),width=w,height=h,rows={{y=y,cells=cells}}},target)
+   if not ok then return false,"UI_SEND_FAILED" end
  end
  return true
 end
