@@ -45,7 +45,7 @@ local function call(p, name, ...)
   local method = p[name]
   if type(method) ~= "function" then return false,nil,"method unavailable: "..tostring(name) end
   local args = {...}
-  local ok,a,b,c,d = pcall(method, p, table.unpack(args))
+  local ok,a,b,c,d = pcall(function() return method(table.unpack(args)) end)
   if ok then return true,a,b,c,d end
   return false,nil,a
 end
