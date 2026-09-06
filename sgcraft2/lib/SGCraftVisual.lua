@@ -1,9 +1,10 @@
 -- BULDACITY SGCraft2 visual engine
 -- Pure OpenComputers GPU drawing; no external graphics library required.
-local component=require("component")
-local V={};V.C={bg=0x030507,black=0x000000,metal=0x111A20,metal2=0x1D2A32,edge=0x52636C,cyan=0x37DFFF,blue=0x4B82FF,green=0x45E59A,yellow=0xF4D35E,orange=0xFF9638,red=0xF05262,white=0xEAF8FF,dim=0x304049,glass=0x071A22,muted=0x70838D};local C=V.C
+local V={}
+V.C={bg=0x030507,black=0x000000,metal=0x111A20,metal2=0x1D2A32,edge=0x52636C,cyan=0x37DFFF,blue=0x4B82FF,green=0x45E59A,yellow=0xF4D35E,orange=0xFF9638,red=0xF05262,purple=0x9B68FF,white=0xEAF8FF,dim=0x304049,glass=0x071A22,muted=0x70838D}
+local C=V.C
 function V.text(g,x,y,s,fg,bg) if x>=1 and y>=1 then g.setForeground(fg or C.white);g.setBackground(bg or C.bg);g.set(x,y,tostring(s or "")) end end
-function V.fill(g,x,y,w,h,c) if w>0 and h>0 then g.setBackground(c);g.fill(x,y,w,h," ") end end
+function V.fill(g,x,y,w,h,c) if w>0 and h>0 then g.setBackground(c or C.bg);g.fill(x,y,w,h," ") end end
 function V.line(g,x,y,w,c) V.fill(g,x,y,w,1,c) end
 function V.fit(s,n) s=tostring(s or "");if n<=0 then return "" end;if #s<=n then return s end;if n<=3 then return s:sub(1,n) end;return s:sub(1,n-3).."..." end
 function V.point(cx,cy,rx,ry,a) local r=math.rad(a);return math.floor(cx+math.cos(r)*rx+.5),math.floor(cy+math.sin(r)*ry+.5) end
