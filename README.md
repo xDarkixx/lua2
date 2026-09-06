@@ -1,100 +1,100 @@
-# lua2 – BULDACITY/2
+# BULDACITY / 2
 
-OpenComputers-Lua-Programme für Minecraft 1.7.10.
+## 🟢 Anfänger? START HIER
 
-> **🟢 Anfänger? Dann starte mit [`docs/01_START_HIER.md`](docs/01_START_HIER.md).**
->
-> Du musst kein Lua können. Die Dateien bleiben bewusst zunächst im Hauptordner, damit bestehende Installationen nicht kaputtgehen. Die neuen Ordner dienen als übersichtliche Struktur und Anleitung.
+BULDACITY ist eine OpenComputers-Steuerung für Minecraft 1.7.10.
 
-## 🗂️ So ist das Projekt aufgebaut
+**Der wichtigste Punkt:** Die alte/originale Lua-Struktur bleibt im Repository erhalten. Die Programme sind zusätzlich sauber in Ordner einsortiert, damit man sie leichter findet und die bestehende Installation nicht kaputtgeht.
+
+## 📁 Neue übersichtliche Struktur
 
 ```text
 lua2/
-├── docs/                 ← 🟢 HIER STARTEN
-│   ├── 01_START_HIER.md
-│   ├── 02_HARDWARE.md
-│   ├── 03_NETZWERK.md
-│   └── 04_AUTOSTART.md
-├── server/               ← Zentrale
-├── network/              ← Netzwerk
-├── clients/              ← Geräte / Mods
+├── server/                  # Zentrale / Tier-3 Computer
+├── network/                 # Netzwerk, Discovery und Netzwerk-Clients
+├── clients/                 # Mod- und Anlagensteuerungen
+│   ├── ae2/
 │   ├── bigreactors/
-│   └── sgcraft/
-├── boot/                 ← Autostart
-├── tools/                ← Diagnose
-└── Root-Dateien          ← kompatibel mit bisherigen Installationen
+│   ├── sgcraft/
+│   ├── diesel/
+│   ├── 3dprinter/
+│   ├── forestry/
+│   ├── galacticraft/
+│   ├── gendustry/
+│   ├── immersiveengineering/
+│   ├── immersiveintegration/
+│   ├── immersiverailroading/
+│   ├── industrialcraft2/
+│   ├── logisticspipes/
+│   ├── mekanism/
+│   ├── pneumaticcraft/
+│   ├── projecte/
+│   ├── rftools/
+│   ├── rotarycraft/
+│   ├── thermalexpansion/
+│   └── thermal/
+├── ui/                      # BULDACITY-Oberfläche
+├── setup/                   # Einrichtungsassistenten
+├── boot/                    # Start / Autostart
+├── tools/                   # Diagnose-Werkzeuge
+└── docs/                    # Anleitungen
 ```
 
-## 🌐 Netzwerk – möglichst einfach
+## 🔒 Original bleibt erhalten
 
-BULDACITY verwendet **BULDACITY/2** auf Port **4242**.
+Die bisherigen Lua-Dateien im Repository-Root wurden **nicht gelöscht und nicht umbenannt**. Sie bleiben als kompatible Original-/Legacy-Versionen vorhanden.
 
-Die vorhandene `Network.lua` erkennt Modems automatisch, öffnet Port 4242, erkennt Wireless-Hardware und unterstützt Client-Discovery, Link/Ping-Tests und Komponentenabfragen.
+Die neuen Ordner enthalten die gleichen Programme als sauber einsortierte Kopien. Dadurch kann die Struktur verbessert werden, ohne eine bestehende OpenComputers-Installation durch geänderte Pfade zu beschädigen.
 
-Der zentrale Ablauf ist:
+### Wichtig für Minecraft
 
-```text
-SERVER STARTEN
-      ↓
-MODEM AUTOMATISCH FINDEN
-      ↓
-PORT 4242
-      ↓
-CLIENT STARTEN
-      ↓
-AUTOMATISCHE ERKENNUNG
-      ↓
-PING / LINK
-      ↓
-GERÄTE IN DEVICES
-```
+Für eine bestehende Installation zunächst weiterhin die bekannten Root-Dateien verwenden. Die Ordnerstruktur ist die neue übersichtliche Organisation und kann später kontrolliert auf die tatsächlichen `/home`-Pfade übernommen werden.
 
-Du brauchst dafür normalerweise keine UUID-Whitelist und musst keine Adressen von Hand eintragen.
+## 🌐 Netzwerk
 
-## 🖥️ Zentrale
+Das Netzwerk ist vollständig vom UI getrennt.
 
-- `BuldacityOS_Tier3.lua` – zentraler Desktop
-- `BuldacityNetworkSetup.lua` – automatischer Netzwerkcheck
-- `Network.lua` – BULDACITY/2 Netzwerkdienst
-- `BuldacityUI.lua` – gemeinsames UI
-- `BuldacityComponentDashboard.lua` – Geräte-/Komponenten-Dashboard
-- `BuldacityAutoStart.lua` – Autostart
+- `network/Network.lua` → Netzwerk-Kern
+- `network/BuldacityNetworkSetup.lua` → klassischer Setup-Assistent
+- `network/BuldacityNetworkTest.lua` → Netzwerkdiagnose
+- `setup/BuldacityNetworkWizard.lua` → einfacher Assistent
+- `setup/BuldacityNetworkWizardUI.lua` → grafischer Touch-Assistent
 
-## ⚙️ Clients
+Standard:
 
-Die grafischen Controller bleiben lokale Apps. Network-Controller verbinden die Geräte mit der Zentrale.
+- Protokoll: `BULDACITY/2`
+- Port: `4242`
+- WLAN-Stärke: automatisch bis `400`
 
-### Big Reactors
+## 🖥️ Oberfläche
 
-- `ReactorBigReactors043A_Touch_Responsive.lua`
-- `ReactorBigReactors043A_Network.lua`
+Die Oberfläche liegt getrennt in `ui/`. Netzwerklogik und grafische Oberfläche werden dadurch nicht miteinander vermischt.
 
-Siehe [`clients/bigreactors/README.md`](clients/bigreactors/README.md).
+## 🔧 Server
 
-### SGCraft
+Die Zentrale liegt zusätzlich unter `server/`:
 
-- `SGCraft_Modern.lua`
-- `SGCraftNetwork_Modern.lua`
+- Tier-3 OS
+- Desktop
+- Component Server
+- Component Dashboard
+- Component Agent
 
-Siehe [`clients/sgcraft/README.md`](clients/sgcraft/README.md).
+## ⚙️ Autostart
 
-## 📚 Dokumentation
+Der Autostart liegt zusätzlich unter `boot/`. Für vorhandene Installationen bleibt `BuldacityAutoStart.lua` im Root erhalten.
 
-- 🟢 [`START HIER`](docs/01_START_HIER.md)
-- 🔧 [`Hardware`](docs/02_HARDWARE.md)
-- 🌐 [`Netzwerk`](docs/03_NETZWERK.md)
-- ▶️ [`Autostart`](docs/04_AUTOSTART.md)
-- `BULDACITY_SCHRITT_FUER_SCHRITT.md`
-- `BULDACITY_SETUP_GUIDE.md`
-- `BULDACITY_NETWORK.md`
-- `BULDACITY_WIRELESS_SETUP.md`
-- `BULDACITY_MOD_SETUP_ADDONS.md`
-- `COMPONENTS.md`
+## 📚 Anleitung
 
-## 🔴 Wichtig bei Fehlern
+Für Einsteiger zuerst:
 
-Immer in dieser Reihenfolge prüfen:
+1. `docs/01_START_HIER.md`
+2. `docs/02_HARDWARE.md`
+3. `docs/03_NETZWERK.md`
+4. `docs/04_AUTOSTART.md`
 
-**Hardware → Modem → Network.lua → lokale Mod-GUI → Network-Controller → Zentrale → Autostart.**
+Danach die jeweiligen Ordner unter `clients/` verwenden.
 
-So lässt sich ein Fehler schnell eingrenzen, ohne zehn Dateien gleichzeitig zu ändern.
+## Ziel
+
+**Einfach für Anfänger, sauber für Fortgeschrittene und kompatibel mit dem bestehenden BULDACITY-System.**
