@@ -1,6 +1,6 @@
 -- Modern launcher.
 -- Runs an existing *_Modern.lua without modifying or replacing it.
--- The Network module is the new centralized Modern network facade.
+-- Modern controllers resolve Network through the centralized root Network.lua.
 local shell=require("shell")
 local target=...
 if not target or target=="" then
@@ -15,9 +15,5 @@ if not file then
   return
 end
 file:close()
-
-package.preload["Network"]=function()
-  return require("Network")
-end
 
 return dofile(path)
