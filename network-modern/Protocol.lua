@@ -1,8 +1,8 @@
--- BULDACITY Modern Network Protocol
+-- Modern Network Protocol
 local M = {}
 
-M.NAME = "BULDACITY"
-M.VERSION = 1
+M.NAME = "MODERN-NET"
+M.VERSION = 2
 M.PORT = 31337
 M.MAX_HOPS = 4
 M.MAX_PACKET_BYTES = 4096
@@ -10,6 +10,7 @@ M.MAX_PACKET_BYTES = 4096
 M.TYPES = {
   HELLO=true, HEARTBEAT=true, COMMAND=true, ACK=true, NACK=true,
   STATUS=true, PING=true, PONG=true, EMERGENCY_STOP=true,
+  UI_FRAME=true, UI_INPUT=true,
 }
 
 function M.new(kind, source, destination, id, payload)
