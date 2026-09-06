@@ -1,17 +1,19 @@
 -- BULDACITY SGCraft compatibility entry point.
--- Loads the BULDACITY SGCX-style controller and can bootstrap it from GitHub.
+-- Bootstraps the controller and its protected SGCraft API library.
 
 local component=require("component")
 local filesystem=require("filesystem")
 
-local target="/home/SGCraft_Buldacity.lua"
-local url="https://raw.githubusercontent.com/xDarkixx/lua2/main/SGCraft_Buldacity.lua"
+local files={
+  {path="/home/SGCraft_Buldacity.lua",url="https://raw.githubusercontent.com/xDarkixx/lua2/main/SGCraft_Buldacity.lua"},
+  {path="/home/SGCraftAPI.lua",url="https://raw.githubusercontent.com/xDarkixx/lua2/main/clients/sgcraft/SGCraftAPI.lua"}
+}
 
-local function download()
+local function download(file)
   if not component.isAvailable("internet") then return false,"Internet Card fehlt" end
-  local h,err=component.internet.request(url)
+  local h,err=component.internet.request(file.url)
   if not h then return false,tostring(err or "HTTP request failed") end
-  local f,openErr=filesystem.open(target,"w")
+  local f,openErr=filesystem.open(file.path,"w")
   if not f then return false,tostring(openErr or "cannot open target") end
   local n=0
   while true do
@@ -24,9 +26,11 @@ local function download()
   return true
 end
 
-if not filesystem.exists(target) then
-  local ok,err=download()
-  if not ok then error("BULDACITY SGCraft controller missing: "..tostring(err)) end
+for _,file in ipairs(files) do
+  if not filesystem.exists(file.path) then
+    local ok,err=download(file)
+    if not ok then error("BULDACITY SGCraft bootstrap failed: "..tostring(err)) end
+  end
 end
 
-return dofile(target)
+return dofile("/home/SGCraft_Buldacity.lua")
