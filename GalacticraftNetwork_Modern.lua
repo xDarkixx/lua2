@@ -1,17 +1,6 @@
 -- GalacticraftNetwork_Modern.lua
--- BULDACITY/2 network wrapper for Galacticraft_Modern.lua.
--- The Modern controller remains unchanged; this file only adds the shared client bridge.
-
-local Network=require("Network")
+local Network=require("network-modern.Network")
 local shell=require("shell")
-local ok,mode=Network.startClient("Galacticraft // Command Center",{
-  controller="Galacticraft_Modern.lua",
-  mod="Galacticraft",
-  version="3.0.12.504",
-  network=true
-})
-if not ok then
-  io.stderr:write("BULDACITY Network unavailable: "..tostring(mode).."\n")
-end
-
+local ok,mode=Network.startClient("Galacticraft // Control Center",{controller="Galacticraft_Modern.lua",mod="Galacticraft",network=true})
+if not ok then io.stderr:write("BULDACITY Modern Network unavailable: "..tostring(mode).."\n") end
 dofile(shell.resolve("Galacticraft_Modern.lua"))
