@@ -1,6 +1,6 @@
--- BULDACITY Modern launcher.
+-- Modern launcher.
 -- Runs an existing *_Modern.lua without modifying or replacing it.
--- The legacy module name "Network" is redirected to the modern central API.
+-- The Network module is the new centralized Modern network facade.
 local shell=require("shell")
 local target=...
 if not target or target=="" then
@@ -17,7 +17,7 @@ end
 file:close()
 
 package.preload["Network"]=function()
-  return require("clients.network.ModernNetworkCompat")
+  return require("Network")
 end
 
 return dofile(path)
