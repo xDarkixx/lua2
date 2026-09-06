@@ -1,8 +1,7 @@
 -- setup/BuldacityNetworkWizardUI.lua
 -- BULDACITY NETWORK WIZARD // graphical touch setup
 -- OpenComputers 1.7.10 / Lua 5.2
--- This is intentionally separate from the original network/setup files.
--- If this UI ever fails, the original BuldacityNetworkSetup.lua remains usable.
+-- Separate graphical setup layer. Network.lua and original setup stay unchanged.
 
 local component=require("component")
 local computer=require("computer")
@@ -10,14 +9,9 @@ local event=require("event")
 local filesystem=require("filesystem")
 
 local okUI,UI=pcall(require,"BuldacityUI")
-if not okUI or not UI then
-  error("BULDACITY NETWORK WIZARD: BuldacityUI.lua fehlt")
-end
-
+if not okUI or not UI then error("BULDACITY NETWORK WIZARD: BuldacityUI.lua fehlt") end
 local okNet,network=pcall(require,"Network")
-if not okNet or not network then
-  error("BULDACITY NETWORK WIZARD: Network.lua fehlt")
-end
+if not okNet or not network then error("BULDACITY NETWORK WIZARD: Network.lua fehlt") end
 
 local PORT=4242
 local STRENGTH=400
@@ -29,16 +23,8 @@ local clientType=nil
 local result=nil
 local running=true
 local buttons={}
-local previousPage=nil
-
-local function safe(fn,...)
-  local ok,a,b,c,d=pcall(fn,...)
-  if ok then return true,a,b,c,d end
-  return false,a
-end
 
 local function saveConfig()
-  if not filesystem or not filesystem.open then return false end
   local f=filesystem.open(cfgPath,"w")
   if not f then return false end
   f:write("ROLE="..tostring(role or "").."\n")
@@ -50,7 +36,7 @@ local function saveConfig()
 end
 
 local function scan()
-  local r={modems=0,wireless=false,strength=0,relay=false,accessPoint=false,filesystem=true}
+  local r={modems=0,wireless=false,strength=0,relay=false,accessPoint=false}
   for address in component.list("modem",true) do
     r.modems=r.modems+1
     local m=component.proxy(address)
@@ -76,22 +62,6 @@ local function setStatus(kind,text,detail)
   page="result"
 end
 
-local function addButton(id,x,y,w,h,label,accent)
-  buttons[id]={x=x,y=y,w=w,h=h,accent=accent or UI.C.cyan}
-  UI.rect(x,y,w,h,UI.C.panel2)
-  UI.rect(x,y,w,1,accent or UI.C.cyan)
-  UI.text(x+2,y+1,UI.fit(label,w-4),UI.C.white,UI.C.panel2)
-end
-
-local function drawButton(id,selected)
-  local b=buttons[id]
-  if not b then return end
-  local bg=selected and UI.C.cyan or UI.C.panel2
-  local fg=selected and UI.C.bg or UI.C.white
-  UI.rect(b.x,b.y,b.w,b.h,bg)
-  UI.text(b.x+2,b.y+math.floor(b.h/2),UI.fit(b.label or "",b.w-4),fg,bg)
-end
-
 local function button(id,x,y,w,h,label,accent)
   buttons[id]={x=x,y=y,w=w,h=h,label=label,accent=accent or UI.C.cyan}
   UI.rect(x,y,w,h,UI.C.panel2)
@@ -110,11 +80,6 @@ local function top(title,subtitle,accent)
   UI.clear()
   UI.header(title,subtitle,accent)
   UI.text(UI.W-18,2,"v"..VERSION,UI.C.muted,UI.C.panel)
-end
-
-local function footerBack()
-  button("back",2,UI.H-3,18,2,"< ZURUECK",UI.C.muted)
-  button("exit",UI.W-20,UI.H-3,18,2,"BEENDEN",UI.C.red)
 end
 
 local function drawHome()
@@ -169,13 +134,13 @@ end
 local function drawTest()
   top("NETZWERK TEST","BULDACITY/2 // DIAGNOSE",UI.C.purple)
   local r=scan()
-  local checks={
-    {"MODEM",r.modems>0},
-    {"PORT 4242",r.modems>0},
-    {"SIGNAL / KABEL",r.wireless or r.modems>0},
-    {"PROTOKOLL","BULDACITY/2"},
-  }
   UI.panel(3,6,UI.W-6,12,"SYSTEM-CHECK",UI.C.purple)
+  local checks={
+    {"MODEM",r.modems>0,"Hardware"},
+    {"PORT 4242",r.modems>0,"Geoeffnet"},
+    {"SIGNAL / KABEL",r.wireless or r.modems>0,"Verbindung"},
+    {"PROTOKOLL","BULDACITY/2"==network.PROTOCOL,"BULDACITY/2"}
+  }
   local y=8
   for _,c in ipairs(checks) do
     local on=c[2]
@@ -203,17 +168,31 @@ local function runConnectionTest()
   if r.modems==0 then setStatus("ERROR","KEIN MODEM GEFUNDEN","Bitte ein OpenComputers Modem anschliessen."); return end
   computer.pullSignal(0.25)
   drawProgress(2,4,"Port 4242 wird geoeffnet...")
-  pcall(function() network.init() end)
+  local initOK=network.init(PORT)
+  if not initOK then setStatus("ERROR","NETZWERK HARDWARE FEHLER","Network.lua konnte kein nutzbares Modem initialisieren."); return end
   pcall(function() network.setWirelessStrength(STRENGTH) end)
   computer.pullSignal(0.25)
-  drawProgress(3,4,"BULDACITY/2 wird gestartet...")
-  pcall(function() network.startServer(function() end) end)
+  drawProgress(3,4,role=="CLIENT" and "Server wird gesucht..." or "Server wird gestartet...")
+  local serviceOK
   if role=="CLIENT" then
-    pcall(function() network.broadcast("HELLO",{name="BULDACITY CLIENT",role="CLIENT",app=clientType or "GENERAL",version=VERSION,protocol="BULDACITY/2",port=PORT}) end)
+    serviceOK=pcall(function() network.startClient("BULDACITY "..tostring(clientType or "CLIENT"),{clientType=clientType or "GENERAL",wizard=true}) end)
   else
-    pcall(function() network.broadcast("SERVER_HELLO",{name="BULDACITY SERVER",role="SERVER",app="NETWORK WIZARD",version=VERSION,protocol="BULDACITY/2",port=PORT,discover=true,scan=true}) end)
+    serviceOK=pcall(function() network.startServer(function() end) end)
   end
-  computer.pullSignal(0.25)
+  if not serviceOK then setStatus("ERROR","NETZWERKDIENST FEHLER","Der BULDACITY/2 Dienst konnte nicht gestartet werden."); return end
+  if role=="CLIENT" then
+    local deadline=computer.uptime()+4
+    while computer.uptime()<deadline do
+      if network.linked and network.serverAddress then break end
+      computer.pullSignal(0.25)
+    end
+    if not network.linked then
+      setStatus("ERROR","SERVER NICHT GEFUNDEN","Der Client ist lokal bereit, aber kein BULDACITY/2 Server antwortet.")
+      return
+    end
+  else
+    pcall(function() network.broadcast("SERVER_HELLO",{name="BULDACITY SERVER",role="SERVER",app="NETWORK WIZARD",version=VERSION,protocol="BULDACITY/2",port=PORT,discover=true,scan=true,serverAddress=network.address()}) end)
+  end
   drawProgress(4,4,"Netzwerk ist bereit. Konfiguration wird gespeichert...")
   saveConfig()
   computer.pullSignal(0.35)
@@ -238,8 +217,7 @@ local function draw()
   elseif page=="scan" then drawScan()
   elseif page=="test" then drawTest()
   elseif page=="progress" then drawProgress(1,1,"Vorbereitung...")
-  elseif page=="result" then drawResult()
-  end
+  elseif page=="result" then drawResult() end
 end
 
 local function chooseClient(t)
