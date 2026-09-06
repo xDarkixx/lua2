@@ -1,841 +1,326 @@
--- ###############################################
--- #              SGCX graphics                  #
--- #                                             #
--- #   03.2020                   by: IlynPayne   #
--- ###############################################
+-- SGCX cinematic Stargate renderer
+-- OpenComputers / Minecraft 1.7.10 / SGCraft
+-- Designed as a graphical diagnostic display: no ASCII-art gate and no hash-pattern UI.
 
---[[
-    Template (not a 1:1 copy):
-                                                                    ###  |
-                                                               /----# #  |
-                                                               |    ###  |
-   /-----------------------------------------------------------/         |
-   |                                                                ###  |
-   |  /-------------------------------------------------------------# #  |
-   |  |                                                             ###  |
-   |  |      /-------------------------------------------------\         |
-   |  |      |                                                 |    ###  |
-   |  |      |             /-------------------------------\   \----# #  |
-   |  |      |             |                               |        ###  |
-   |  |      |     #######@@@#######                       |             |
-   |  |      | #####       |       #####                   |        ###  |
-   |  |      @@@           |           @@@-------------\   \--------# #  |
-   |  |    #@@             |             @@#           |            ###  |
-   |  |   ##               |                ##         |                 |
-   |  |  ##               ###               ##         |            ###  |
-   |  | ##                ###                ##        \------------# #  |
-   |  | ##                                   ##                     ###  |
-   |  \-@@                 #                 @@---------------\          |
-   |    @@                ###                @@               |     ###  |
-   |    ##               ## ##               ##               \-----# #  |
-   |    ##              ##   ##              ##                     ###  |
-   |    ##             ##     ##             ##                          |
-   |     ##           ##       ##           ##                      ###  |
-   |      @@               |               @@                 /-----# #  |
-   \-------@@#             |             #@@------------------/     ###  |
-             ###           |           ###                               |
-               #####       |       #####                            ###  |
-                   #@@@####=####@@@#                          /-----# #  |
-                     |           |                            |     ###  |
-                     |           \----------------------------/          |
-                     |                                              ###  |
-                     \----------------------------------------------# #  |
-                                                                    ###  |
-                                                                         |
---------------------------------------------------------------------------
-
-]]
-
-
-local version = "1.0"
-local startArgs = {...}
-if startArgs[1] == "version_check" then return version end
-
--- Imports
-package.loaded.color_grid = nil
 local gml = require("gml")
-local colorGrid = require("color_grid")
+local unicode = require("unicode")
 
--- Constants
-local SYMBOLS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-local COLORS = {
-    frame = 0x333333,
-    activeChevron = 0xff6600,
-    iris = 0xb4b4b4,
-    eventHorizon = 0x4086FF,
-    box = 0x333333,
-    lineActive = 0xff0000,
-    lineInactive = 0x330000,
-    text = 0xffffff
-}
 local graphics = {}
+local version = "2.0"
 
-graphics.createStargateComponent = function (gui, startX, startY)
-    local backgroundColor = gml.api.findStyleProperties(gui, "fill-color-bg")
+if ({...})[1] == "version_check" then return version end
 
-    local stargateWidth = 40
-    local stargateHeight = 20
-    local stargateXOffset = 5
-    local stargateYOffset = 10
-    local totalWidth = 68
-    local totalHeight = 35
-    local boxesXOffset = 63
-    local boxesYOffset = 0
-    local stargate = gml.api.baseComponent(gui, startX, startY, totalWidth, totalHeight, "stargate", false)
+local C = {
+    bg = 0x03070A,
+    panel = 0x07141A,
+    panel2 = 0x0B2028,
+    frame = 0x294650,
+    edge = 0x4B6872,
+    cyan = 0x39D8FF,
+    blue = 0x4D8DFF,
+    active = 0xFF8A32,
+    hot = 0xFFE7B0,
+    green = 0x45E59A,
+    yellow = 0xF4D35E,
+    red = 0xF05262,
+    white = 0xEAF8FF,
+    muted = 0x78919A,
+    iris = 0x9DA7AD,
+    black = 0x000000
+}
 
-    stargate.symbolIndex = 0
-    stargate.shouldDraw = true
-    stargate.onIrisOpened = function (t)
-        t.irisClosed = false
-        t:fill()
-    end
-    stargate.onIrisClosed = function (t)
-        t.irisClosed = true
-        t:fill()
-    end
-    stargate.onConnected = function (t, remoteAddress)
-        t.connected = true
-        t:fill()
+local BLOCK = unicode.char(0x2588)
+local DIAMOND = unicode.char(0x25C6)
+local RING = unicode.char(0x25C9)
+local DOT = unicode.char(0x00B7)
+local GLYPH = unicode.char(0x25C7)
 
-        if remoteAddress and t.symbolIndex == 0 then
-            -- No symbols were locked, do all necessary drawing
-            for i = 1, #remoteAddress do
-                t.lockSymbol(t, i, remoteAddress:sub(i, i), true)
-            end
-        end
-    end
-    stargate.onDisconnected = function (t)
-        t.connected = false
-        t:fill()
-        t:lockSymbol(0)
-    end
-    stargate.onSymbolLocked = function (t, symbolNo, symbolLetter)
-        t:lockSymbol(symbolNo, symbolLetter)
-    end
-    stargate.suspendDrawing = function (t)
-        t.shouldDraw = false
-    end
-    stargate.activateDrawing = function (t)
-        t.shouldDraw = true
-        if t.redrawRequired then
-            t:draw()
-            t.redrawRequired = false
-        end
-    end
-
-    stargate.pencils = {}
-    for i = 1, 9 do
-        table.insert(stargate.pencils, colorGrid.pencil(colorGrid.pencilMode.BOLD, gui, startX, startY + 1, totalWidth - 3, totalHeight - 2))
-        stargate.pencils[i]:color(COLORS.lineInactive, backgroundColor)
-    end
-
-    stargate.draw = function (t)
-        if t:isHidden() then return end
-        if not t.shouldDraw then
-            t.redrawRequired = true
-            return
-        end
-
-        local subdraw = function (x, y, vx, vy)
-            for i = 0, 3 do
-                t.renderTarget.set(x, y + 6 * vy + i * vy, ' ')
-                t.renderTarget.set(x + 1 * vx, y + 6 * vy + i * vy, ' ')
-            end
-            t.renderTarget.set(x + 1 * vx, y + 5 * vy, ' ')
-            t.renderTarget.set(x + 2 * vx, y + 5 * vy, ' ')
-            t.renderTarget.set(x + 2 * vx, y + 4 * vy, ' ')
-            t.renderTarget.set(x + 3 * vx, y + 4 * vy, ' ')
-            t.renderTarget.set(x + 3 * vx, y + 3 * vy, ' ')
-            t.renderTarget.set(x + 4 * vx, y + 3 * vy, ' ')
-            t.renderTarget.set(x + 5 * vx, y + 3 * vy, ' ')
-            t.renderTarget.set(x + 5 * vx, y + 2 * vy, ' ')
-            t.renderTarget.set(x + 6 * vx, y + 2 * vy, ' ')
-            t.renderTarget.set(x + 7 * vx, y + 2 * vy, ' ')
-            for i = 0, 4 do
-                t.renderTarget.set(x + 7 * vx + i * vx, y + 1 * vy, ' ')
-            end
-            for i = 0, 8 do
-                t.renderTarget.set(x + 11 * vx + i * vx, y, ' ')
-            end
-        end
-
-        t.renderTarget.setBackground(COLORS.frame)
-        subdraw(t.posX + stargateXOffset, t.posY + stargateYOffset, 1, 1)
-        subdraw(t.posX + stargateWidth - 1 + stargateXOffset, t.posY + stargateYOffset, -1, 1)
-        subdraw(t.posX + stargateXOffset, t.posY + stargateHeight - 1 + stargateYOffset, 1, -1)
-        subdraw(t.posX + stargateWidth - 1 + stargateXOffset, t.posY + stargateHeight - 1 + stargateYOffset, -1, -1)
-
-        t:drawBoxes()
-
-        t.visible = true
-    end
-    stargate.drawBoxes = function (t)
-        t.renderTarget.setBackground(COLORS.box)
-        for i = 0, 8 do
-            t.renderTarget.fill(t.posX + boxesXOffset, t.posY + boxesYOffset + i * 4, 5, 3, ' ')
-        end
-        t.renderTarget.setBackground(backgroundColor)
-        for i = 0, 8 do
-            t.renderTarget.fill(t.posX + boxesXOffset + 1, t.posY + boxesYOffset + i * 4 + 1, 3, 1, ' ')
-        end
-    end
-    stargate.fill = function (t)
-        if not t.shouldDraw then
-            t.redrawRequired = true
-            return
-        end
-        if t.irisClosed then
-            t:doFill(COLORS.iris)
-        elseif t.connected then
-            t:doFill(COLORS.eventHorizon)
-        else
-            t:doFill(backgroundColor)
-        end
-    end
-	stargate.doFill = function (t, hex)
-		local subfill = function (sy, vy)
-			t.renderTarget.fill(t.posX + stargateXOffset + 12, sy + 1 * vy, 16, 1, ' ')
-			t.renderTarget.fill(t.posX + stargateXOffset + 8, sy + 2 * vy, 24, 1, ' ')
-			t.renderTarget.fill(t.posX + stargateXOffset + 6, sy + 3 * vy, 28, 1, ' ')
-			t.renderTarget.fill(t.posX + stargateXOffset + 4, sy + 4 * vy, 32, 1, ' ')
-			t.renderTarget.fill(t.posX + stargateXOffset + 3, sy + 5 * vy, 34, 1, ' ')
-		end
-		t.renderTarget.setBackground(hex)
-		subfill(t.posY + stargateYOffset, 1)
-		t.renderTarget.fill(t.posX + stargateXOffset + 2, t.posY + stargateYOffset + 6, 36, 8, ' ')
-		subfill(t.posY + stargateYOffset + stargateHeight - 1, -1)
-	end
-    stargate.lockSymbol = function (t, number, symbolLetter, hideChevrons)
-        if not t.shouldDraw then
-            t.redrawRequired = true
-            return
-        end
-		if (number >= 1 and t.symbolIndex == 0) or number == 0 then
-			t.renderTarget.setBackground(number == 0 and COLORS.frame or COLORS.activeChevron)
-			t.renderTarget.fill(t.posX + 2 + stargateXOffset, t.posY + 15 + stargateYOffset, 2, 1, ' ')
-            t.renderTarget.fill(t.posX + 3 + stargateXOffset, t.posY + 16 + stargateYOffset, 2, 1, ' ')
-            stargate.pencils[1]:color(number == 0 and COLORS.lineInactive or COLORS.lineActive, nil)
-            stargate.pencils[1]:draw()
-            t.renderTarget.setBackground(backgroundColor)
-            t.renderTarget.setForeground(COLORS.text)
-            t.renderTarget.set(t.posX + boxesXOffset + 2, t.posY + boxesYOffset + 1, number == 0 and ' ' or symbolLetter)
-			t.symbolIndex = 1
-		end
-		if (number >= 2 and t.symbolIndex == 1) or number == 0 then
-			t.renderTarget.setBackground(number == 0 and COLORS.frame or COLORS.activeChevron)
-            t.renderTarget.fill(t.posX + stargateXOffset, t.posY + 8 + stargateYOffset, 2, 2, ' ')
-            stargate.pencils[2]:color(number == 0 and COLORS.lineInactive or COLORS.lineActive, nil)
-            stargate.pencils[2]:draw()
-            t.renderTarget.setBackground(backgroundColor)
-            t.renderTarget.setForeground(COLORS.text)
-            t.renderTarget.set(t.posX + boxesXOffset + 2, t.posY + boxesYOffset + 5, number == 0 and ' ' or symbolLetter)
-			t.symbolIndex = 2
-		end
-		if (number >= 3 and t.symbolIndex == 2) or number == 0 then
-			t.renderTarget.setBackground(number == 0 and COLORS.frame or COLORS.activeChevron)
-			t.renderTarget.fill(t.posX + 5 + stargateXOffset, t.posY + 2 + stargateYOffset, 3, 1, ' ')
-            t.renderTarget.fill(t.posX + 4 + stargateXOffset, t.posY + 3 + stargateYOffset, 2, 1, ' ')
-            stargate.pencils[3]:color(number == 0 and COLORS.lineInactive or COLORS.lineActive, nil)
-            stargate.pencils[3]:draw()
-            t.renderTarget.setBackground(backgroundColor)
-            t.renderTarget.setForeground(COLORS.text)
-            t.renderTarget.set(t.posX + boxesXOffset + 2, t.posY + boxesYOffset + 9, number == 0 and ' ' or symbolLetter)
-			t.symbolIndex = 3
-		end
-		if (number >= 4 and t.symbolIndex == 3) or number == 0 then
-			t.renderTarget.setBackground(number == 0 and COLORS.frame or COLORS.activeChevron)
-            t.renderTarget.fill(t.posX + 18 + stargateXOffset, t.posY + stargateYOffset, 4, 1, ' ')
-            stargate.pencils[4]:color(number == 0 and COLORS.lineInactive or COLORS.lineActive, nil)
-            stargate.pencils[4]:draw()
-            t.renderTarget.setBackground(backgroundColor)
-            t.renderTarget.setForeground(COLORS.text)
-            t.renderTarget.set(t.posX + boxesXOffset + 2, t.posY + boxesYOffset + 13, number == 0 and ' ' or symbolLetter)
-			t.symbolIndex = 4
-		end
-		if (number >= 5 and t.symbolIndex == 4) or number == 0 then
-			t.renderTarget.setBackground(number == 0 and COLORS.frame or COLORS.activeChevron)
-			t.renderTarget.fill(t.posX + 32 + stargateXOffset, t.posY + 2 + stargateYOffset, 3, 1, ' ')
-            t.renderTarget.fill(t.posX + 34 + stargateXOffset, t.posY + 3 + stargateYOffset, 2, 1, ' ')
-            stargate.pencils[5]:color(number == 0 and COLORS.lineInactive or COLORS.lineActive, nil)
-            stargate.pencils[5]:draw()
-            t.renderTarget.setBackground(backgroundColor)
-            t.renderTarget.setForeground(COLORS.text)
-            t.renderTarget.set(t.posX + boxesXOffset + 2, t.posY + boxesYOffset + 17, number == 0 and ' ' or symbolLetter)
-			t.symbolIndex = 5
-		end
-		if (number >= 6 and t.symbolIndex == 5) or number == 0 then
-			t.renderTarget.setBackground(number == 0 and COLORS.frame or COLORS.activeChevron)
-            t.renderTarget.fill(t.posX + 38 + stargateXOffset, t.posY + 8 + stargateYOffset, 2, 2, ' ')
-            stargate.pencils[6]:color(number == 0 and COLORS.lineInactive or COLORS.lineActive, nil)
-            stargate.pencils[6]:draw()
-            t.renderTarget.setBackground(backgroundColor)
-            t.renderTarget.setForeground(COLORS.text)
-            t.renderTarget.set(t.posX + boxesXOffset + 2, t.posY + boxesYOffset + 21, number == 0 and ' ' or symbolLetter)
-			t.symbolIndex = 6
-		end
-		if (number >= 7 and t.symbolIndex == 6) or number == 0 then
-			t.renderTarget.setBackground(number == 0 and COLORS.frame or COLORS.activeChevron)
-			t.renderTarget.fill(t.posX + 35 + stargateXOffset, t.posY + 16 + stargateYOffset, 2, 1, ' ')
-            t.renderTarget.fill(t.posX + 36 + stargateXOffset, t.posY + 15 + stargateYOffset, 2, 1, ' ')
-            stargate.pencils[7]:color(number == 0 and COLORS.lineInactive or COLORS.lineActive, nil)
-            stargate.pencils[7]:draw()
-            t.renderTarget.setBackground(backgroundColor)
-            t.renderTarget.setForeground(COLORS.text)
-            t.renderTarget.set(t.posX + boxesXOffset + 2, t.posY + boxesYOffset + 25, number == 0 and ' ' or symbolLetter)
-			t.symbolIndex = 7
-		end
-		if (number >= 8 and t.symbolIndex == 7) or number == 0 then
-			t.renderTarget.setBackground(number == 0 and COLORS.frame or COLORS.activeChevron)
-            t.renderTarget.fill(t.posX + 24 + stargateXOffset, t.posY + 19 + stargateYOffset, 4, 1, ' ')
-            stargate.pencils[8]:color(number == 0 and COLORS.lineInactive or COLORS.lineActive, nil)
-            stargate.pencils[8]:draw()
-            t.renderTarget.setBackground(backgroundColor)
-            t.renderTarget.setForeground(COLORS.text)
-            t.renderTarget.set(t.posX + boxesXOffset + 2, t.posY + boxesYOffset + 29, number == 0 and ' ' or symbolLetter)
-			t.symbolIndex = 8
-		end
-		if (number == 9 and t.symbolIndex == 8) or number == 0 then
-			t.renderTarget.setBackground(number == 0 and COLORS.frame or COLORS.activeChevron)
-            t.renderTarget.fill(t.posX + 12 + stargateXOffset, t.posY + 19 + stargateYOffset, 4, 1, ' ')
-            stargate.pencils[9]:color(number == 0 and COLORS.lineInactive or COLORS.lineActive, nil)
-            stargate.pencils[9]:draw()
-            t.renderTarget.setBackground(backgroundColor)
-            t.renderTarget.setForeground(COLORS.text)
-            t.renderTarget.set(t.posX + boxesXOffset + 2, t.posY + boxesYOffset + 33, number == 0 and ' ' or symbolLetter)
-			t.symbolIndex = 9
-        end
-
-        t:fill()
-        if number == 0 then 
-            t.symbolIndex = 0    
-        elseif not hideChevrons then
-            -- Draw a chevron
-            local index = SYMBOLS:find(symbolLetter:sub(1, 1):upper())
-            if not index then
-                print('no index')
-                return
-            end
-
-            local symbol = graphics.symbols[index + 1]
-            local grid = colorGrid.grid({
-                ["#"] = COLORS.activeChevron
-            })
-
-            for _, s in pairs(symbol) do
-                grid:line(s)
-            end
-
-            local sx = startX + stargateXOffset + math.floor(stargateWidth / 2)
-            local sy = startY + stargateYOffset + math.floor(stargateHeight / 2)
-            grid:draw(t.renderTarget, sx, sy, true)
-        end
-    end
-
-    -- Below are lines connecting stargate to chevron boxes
-
-    -- 1st chevron
-    stargate.pencils[1]:beginPath(stargateXOffset + 3, stargateYOffset + stargateHeight - 4)
-    stargate.pencils[1]:left(7)
-    stargate.pencils[1]:up(23)
-    stargate.pencils[1]:right(59)
-    stargate.pencils[1]:up(2)
-    stargate.pencils[1]:right(3)
-    stargate.pencils[1]:endPath()
-
-    -- 2nd chevron
-    stargate.pencils[2]:beginPath(stargateXOffset, stargateYOffset + 9)
-    stargate.pencils[2]:left(1)
-    stargate.pencils[2]:up(14)
-    stargate.pencils[2]:right(59)
-    stargate.pencils[2]:endPath()
-
-    -- 3rd chevron
-    stargate.pencils[3]:beginPath(stargateXOffset + 5, stargateYOffset + 2)
-    stargate.pencils[3]:up(5)
-    stargate.pencils[3]:right(50)
-    stargate.pencils[3]:down(2)
-    stargate.pencils[3]:right(3)
-    stargate.pencils[3]:endPath()
-
-    -- 4th chevron
-    stargate.pencils[4]:beginPath(stargateXOffset + 20, stargateYOffset - 1)
-    stargate.pencils[4]:up(1)
-    stargate.pencils[4]:right(31)
-    stargate.pencils[4]:down(5)
-    stargate.pencils[4]:right(7)
-    stargate.pencils[4]:endPath()
-
-    -- 5th chevron
-    stargate.pencils[5]:beginPath(stargateXOffset + stargateWidth - 4, stargateYOffset + 2)
-    stargate.pencils[5]:right(11)
-    stargate.pencils[5]:down(5)
-    stargate.pencils[5]:right(11)
-    stargate.pencils[5]:endPath()
-
-    -- 6th chevron
-    stargate.pencils[6]:beginPath(stargateXOffset + stargateWidth + 1, stargateYOffset + 9)
-    stargate.pencils[6]:right(14)
-    stargate.pencils[6]:down(2)
-    stargate.pencils[6]:right(3)
-    stargate.pencils[6]:endPath()
-
-    -- 7th chevron
-    stargate.pencils[7]:beginPath(stargateXOffset + stargateWidth - 2, stargateYOffset + 16)
-    stargate.pencils[7]:right(17)
-    stargate.pencils[7]:up(1)
-    stargate.pencils[7]:right(3)
-    stargate.pencils[7]:endPath()
-
-    -- 8th chevron
-    stargate.pencils[8]:beginPath(26 + stargateXOffset, stargateYOffset + stargateHeight)
-    stargate.pencils[8]:down(1)
-    stargate.pencils[8]:right(29)
-    stargate.pencils[8]:up(2)
-    stargate.pencils[8]:right(3)
-    stargate.pencils[8]:endPath()
-
-    -- 9th chevron
-    stargate.pencils[9]:beginPath(14 + stargateXOffset, stargateYOffset + stargateHeight)
-    stargate.pencils[9]:down(3)
-    stargate.pencils[9]:right(44)
-    stargate.pencils[9]:endPath()
-
-    gui:addComponent(stargate)
-
-    return stargate
+local function point(cx, cy, rx, ry, angle)
+    local r = math.rad(angle)
+    return math.floor(cx + math.cos(r) * rx + 0.5), math.floor(cy + math.sin(r) * ry + 0.5)
 end
 
--- https://stargate.fandom.com/wiki/Glyph
-graphics.symbols = {
-    [1] = { -- Point of origin
-        "    ###",
-        "    ###",
-        "",
-        "     #",
-        "    ###",
-        "   ## ##",
-        "  ##   ##",
-        " ##     ##",
-        "##       ##"
-    },
-    [2] = { -- Crater
-        "   ########",
-        "   ##    ##",
-        "   ##   ##",
-        "    #####",
-        "   ##   ##",
-        "  ##     ##",
-        " ##       ##",
-        "  ##      ##",
-        "####      ####"
-    },
-    [3] = { -- Virgo
-        "     #####   #####",
-        "   ##      ####",
-        "  ## #  #####",
-        "   #######",
-        "   ##  ##",
-        "   ######",
-        "  ###    ####",
-        " ###       ####### ",
-        "####"
-    },
-    [4] = { -- Bootes
-        "     #####",
-        "  #####",
-        "### ##",
-        "     ##",
-        "      ##",
-        "        ##",
-        "          ###",
-        "           #  #",
-        "            ####"
-    },
-    [5] = { -- Centaurus
-        "       ####",
-        "        ##",
-        "       ##",
-        "  #   ##",
-        "  ###### ",
-        " #  #  ##",
-        "  ##    ##",
-        "# #      ##",
-        " #       ####"
-    },
-    [6] = { -- Libra
-        "         ###",
-        "   #######",
-        "  # ##",
-        " #  ##",
-        "#   ##",
-        "#   ##        ##",
-        " #  ##    ######",
-        "  # ## ###",
-        "   #####"
-    },
-    [7] = { -- Serpens Caput
-        "             ####",
-        "              ##",
-        "             ##",
-        "     ####   ##",
-        "     #   ###",
-        "   ######",
-        "  ##",
-        " ##",
-        "####"
-    },
-    [8] = { -- Norma
-        "##",
-        "#  ##",
-        "#    ##",
-        "#  ##",
-        "##         ##",
-        "           #  ##",
-        "           #    ##",
-        "           #  ##",
-        "           ##"
-    },
-    [9] = { -- Scorpious
-        "          #######",
-        "         ##     ##",
-        "         ##    ##",
-        "         ##    #",
-        "#####   ##",
-        " ###   ##",
-        " #######",
-        " ###",
-        "#####"
-    },
-    [10] = { -- Corona Australis
-        "      ##",
-        "    ##  ##",
-        "    ########",
-        "        #####",
-        "            ##",
-        " #          ##",
-        "# #      #####",
-        "### #########",
-        "    #####"
-    },
-    [11] = { -- Scutum
-        "  #",
-        "  ##",
-        " #  #",
-        " #  #  ##",
-        "#    #  ##",
-        "######",
-        "     ###",
-        "      ###",
-        "       ####"
-    },
-    [12] = { --Sagitarius
-        "           ###",
-        "           #####",
-        " ###           ##",
-        "#  #           ##",
-        "#  #           ##",
-        "#  #   ###     ##",
-        "#############  ##",
-        "       ##   ####",
-        "        ##"
-    },
-    [13] = { -- Aqulia
-        "  ###",
-        "  ##",
-        " ##",
-        "###",
-        "   ####  #",
-        "      ####",
-        "   ####  #",
-        "####",
-        "##"
-    },
-    [14] = { -- Microscopium
-        " ####",
-        "  ##       ###",
-        "  ##       #  #",
-        " ##        ###",
-        " ##              #",
-        " ##         ######",
-        "##     ######    #",
-        "########",
-        "###"
-    },
-    [15] = { -- Capricornus
-        "    ####",
-        "   ##  ###",
-        "   ##    ###",
-        "  ##       ##",
-        "  ##        ##",
-        " ##          ##",
-        " ###################",
-        "##                ##",
-        "##"
-    },
-    [16] = { -- Piscis Austrinus
-        "",
-        "           #########",
-        "     ########    #  ##",
-        " #####           #   ##",
-        "##               #    ##",
-        " ######          #   ##",
-        "     ######      #  ##",
-        "          ##########",
-        ""
-    },
-    [17] = { -- Equuleus
-        "####",
-        "#######  ##",
-        " ##   #####",
-        "  ##",
-        "   ##",
-        "    ##",
-        "     ##   ####",
-        "      ########",
-        "        ##"
-    },
-    [18] = { -- Aquarius
-        "          ####",
-        "           ##",
-        "            ##",
-        "             ###",
-        "     ####    ##",
-        "       ###  ##",
-        "#        #####",
-        "###########",
-        "#"
-    },
-    [19] = { -- Pegasus
-        "",
-        "          #      #####",
-        "   ##########   ###",
-        " ###      #######    ###",
-        "              ###     ###",
-        "  ##############",
-        " ##",
-        "###",
-        ""
-    },
-    [20] = { -- Sculptor
-        "           ####",
-        "            ##",
-        "           ##",
-        "          ##",
-        "         ##",
-        "#####   ###",
-        "#    #####",
-        " #  ###",
-        "  ###"
-    },
-    [21] = { -- Pisces
-        "               ###",
-        " ###     ########",
-        "##  ######    ##",
-        " ###          ##",
-        "             ##",
-        "             ##",
-        "             ##",
-        "           ###",
-        "            ###"
-    },
-    [22] = { -- Andromeda
-        "",
-        "",
-        "         ##      #   ##",
-        "    ##################",
-        "  #####          #   ##",
-        "##############",
-        "            ###",
-        "",
-        ""
-    },
-    [23] = { -- Triangulum
-        "#####",
-        "##  ###",
-        " ##   ###",
-        " ##     ###",
-        "  ##      ##",
-        "  ##     ##",
-        "   ##   ##",
-        "   ##  ##",
-        "   #####"
-    },
-    [24] = { -- Aries
-        "",
-        "",
-        "",
-        "#                  #",
-        "#########  #########",
-        "#      ######      #",
-        "",
-        "",
-        ""
-    },
-    [25] = { -- Perseus
-        " ###",
-        "#####",
-        " #  ###",
-        "     ###",
-        "        ######",
-        "            ####",
-        "##          #  #",
-        "######      #  #",
-        "     ############"
-    },
-    [26] = { -- Cetus
-        "#",
-        "######",
-        "     ####",
-        "       #######",
-        "       ##    ##",
-        "      ##      ##",
-        "      ##      ##",
-        "      ##  #####",
-        "     ######"
-    },
-    [27] = { -- Taurus
-        "",
-        "",
-        "                   #",
-        "#         ##########",
-        "###########",
-        "#       ####",
-        "           ##########",
-        "",
-        ""
-    },
-    [28] = { -- Auriga
-        "       ##",
-        "####  ####",
-        " ##",
-        " ##       ####",
-        " ##        ##",
-        " ##        ##",
-        " ###      ##",
-        "###########",
-        " ###"
-    },
-    [29] = { -- Eridanus
-        "",
-        "",
-        "                    #",
-        "         #####  #  ###",
-        "        ##  ########",
-        "###   #####",
-        "  #####",
-        "",
-        ""
-    },
-    [30] = { -- Orion
-        " #########",
-        "  ##     ######",
-        "   ##      ##",
-        "   ##     ##",
-        "     ######",
-        "  ###     ##",
-        " ##       ##",
-        "######     ##",
-        "     #######"
-    },
-    [31] = { -- Canis Minor
-        "     ######",
-        " #####   ##",
-        "  ##    ##",
-        "   ##  ##",
-        "     ##",
-        "   ##  ##",
-        "  ##    ##",
-        " ##   #####",
-        "#######"
-    },
-    [32] = { -- Monoceros
-        "",
-        "              ####",
-        "#####      #####  ###",
-        "    ##   #####      ##",
-        "   ########          ###",
-        "###  ##",
-        " #  ##",
-        "  ###",
-        ""
-    },
-    [33] = { -- Gemini
-        "                 ###",
-        "                ##",
-        " #################",
-        " ##             ##",
-        "###             ##",
-        " ##             ##",
-        " #################",
-        " ##             ###",
-        ""
-    },
-    [34] = { -- Hydra
-        "",
-        "###",
-        "##",
-        " ####   #",
-        "   ###### # ##",
-        "            ###",
-        "              ###",
-        "                ##",
-        ""
-    },
-    [35] = { -- Lynx
-        "",
-        "",
-        "",
-        "    #########       ##",
-        "######    ####    ####",
-        "             #######",
-        "",
-        "",
-        ""
-    },
-    [36] = { -- Cancer
-        " ##",
-        "####",
-        "        ####",
-        "       ###",
-        "      ##",
-        "      ##",
-        "     ##",
-        "     ##",
-        "   #####"
-    },
-    [37] = { -- Sextans
-        "    ####",
-        "     ##",
-        "",
-        "     ##",
-        "####",
-        "  ###",
-        "    ###",
-        "     ###",
-        "     #####"
-    },
-    [38] = { -- Leo Miner
-        " ###",
-        "####",
-        "   ###",
-        "     ###",
-        "       ###",
-        "          ####",
-        "             ####   #",
-        "                #####",
-        "                    #"
-    },
-    [39] = { -- Leo
-        "        ##",
-        "       #####",
-        "      ##   ##",
-        "###   ##    ##",
-        "########     ##",
-        "       ##     ##",
-        "        ##     ##",
-        "       ####     ###",
-        "                #####"
-    }
+local function setBg(g, c)
+    g.setBackground(c)
+end
+
+local function setFg(g, c)
+    g.setForeground(c)
+end
+
+local function fill(g, x, y, w, h, c)
+    if w > 0 and h > 0 then
+        setBg(g, c)
+        g.fill(x, y, w, h, " ")
+    end
+end
+
+local function text(g, x, y, s, fg, bg)
+    if x < 1 or y < 1 then return end
+    setBg(g, bg or C.bg)
+    setFg(g, fg or C.white)
+    g.set(x, y, tostring(s or ""))
+end
+
+local function fit(s, n)
+    s = tostring(s or "")
+    if #s <= n then return s end
+    if n <= 3 then return s:sub(1, n) end
+    return s:sub(1, n - 3) .. "..."
+end
+
+local glyphPatterns = {
+    {"010","101","010"},{"100","111","001"},{"111","010","100"},
+    {"101","010","101"},{"110","011","110"},{"011","110","011"},
+    {"111","001","111"},{"101","111","101"},{"001","111","100"},
+    {"110","101","011"},{"111","100","111"},{"100","111","001"}
 }
+
+local function drawGlyph(g, x, y, index, fg, bg)
+    local p = glyphPatterns[((index - 1) % #glyphPatterns) + 1]
+    for yy = 1, 3 do
+        for xx = 1, 3 do
+            if p[yy]:sub(xx, xx) == "1" then
+                text(g, x + xx - 2, y + yy - 2, GLYPH, fg, bg)
+            end
+        end
+    end
+end
+
+local function drawChevron(g, cx, cy, rx, ry, angle, active, pulse)
+    local x, y = point(cx, cy, rx, ry, angle)
+    local col = active and C.active or C.frame
+    if pulse and active then col = C.hot end
+    fill(g, x - 2, y - 1, 5, 3, C.panel)
+    text(g, x - 1, y - 1, DIAMOND, col, C.panel)
+    text(g, x - 1, y + 1, DIAMOND, col, C.panel)
+    fill(g, x - 1, y, 3, 1, col)
+end
+
+local function drawRing(g, cx, cy, rx, ry, active, rotation)
+    for ring = 0, 3 do
+        for a = 0, 350, 10 do
+            local x, y = point(cx, cy, rx - ring, ry - ring, a + rotation)
+            local col = active and (ring < 2 and C.cyan or C.edge) or C.frame
+            text(g, x, y, ring == 0 and RING or DOT, col, C.panel)
+        end
+    end
+end
+
+local function drawHorizon(g, cx, cy, rx, ry, phase)
+    for y = -ry + 2, ry - 2 do
+        local width = math.max(2, math.floor(rx * math.sqrt(math.max(0, 1 - (y * y) / (ry * ry)))))
+        local start = cx - width
+        local line = ""
+        for i = 1, width * 2 + 1 do
+            local n = (i + y + phase) % 5
+            line = line .. ((n == 0 or n == 1) and "•" or " ")
+        end
+        text(g, start, cy + y, line, (y % 2 == 0) and C.cyan or C.blue, C.panel)
+    end
+end
+
+local function drawIris(g, cx, cy, rx, ry)
+    for i = 0, 7 do
+        local angle = i * 45
+        for r = 2, math.max(3, math.min(rx, ry) - 2) do
+            local x, y = point(cx, cy, r, math.floor(r * 0.62), angle)
+            text(g, x, y, BLOCK, C.iris, C.panel2)
+        end
+    end
+    text(g, cx - 5, cy - 1, "◀ IRIS ▶", C.white, C.iris)
+    text(g, cx - 5, cy + 1, "  CLOSED", C.red, C.iris)
+end
+
+local function drawSideTelemetry(t)
+    local g = t.renderTarget
+    local x = t.posX + 50
+    local y = t.posY + 2
+    local d = t.data or {}
+    local state = tostring(d.state or "NO INTERFACE")
+    local engaged = tonumber(d.engaged or 0) or 0
+    local iris = tostring(d.iris or "Offline")
+
+    fill(g, x, y, 17, 31, C.panel)
+    fill(g, x, y, 17, 1, C.panel2)
+    text(g, x + 1, y, "GATE TELEMETRY", C.cyan, C.panel2)
+    text(g, x + 1, y + 2, "STATE", C.muted, C.panel)
+    text(g, x + 1, y + 3, fit(state:upper(), 15), state == "Connected" and C.green or (state == "Offline" and C.red or C.white), C.panel)
+    text(g, x + 1, y + 5, "CHEVRON ARRAY", C.muted, C.panel)
+    for i = 1, 9 do
+        local col = i <= engaged and C.active or C.frame
+        fill(g, x + 1 + ((i - 1) % 3) * 5, y + 6 + math.floor((i - 1) / 3) * 2, 4, 1, col)
+    end
+    text(g, x + 1, y + 13, "IRIS", C.muted, C.panel)
+    text(g, x + 1, y + 14, fit(iris:upper(), 15), iris == "Closed" and C.red or (iris == "Open" and C.green or C.yellow), C.panel)
+    text(g, x + 1, y + 16, "LINK", C.muted, C.panel)
+    text(g, x + 1, y + 17, d.remote and "REMOTE LOCKED" or "NO REMOTE", d.remote and C.green or C.muted, C.panel)
+    text(g, x + 1, y + 19, "MODE", C.muted, C.panel)
+    text(g, x + 1, y + 20, d.direction and tostring(d.direction):upper() or "STANDBY", C.cyan, C.panel)
+    text(g, x + 1, y + 23, "LOCAL", C.muted, C.panel)
+    text(g, x + 1, y + 24, fit(d.local or "UNKNOWN", 15), C.white, C.panel)
+    text(g, x + 1, y + 26, "REMOTE", C.muted, C.panel)
+    text(g, x + 1, y + 27, fit(d.remote or "—", 15), C.white, C.panel)
+end
+
+function graphics.createStargateComponent(gui, startX, startY)
+    local backgroundColor = gml.api.findStyleProperties(gui, "fill-color-bg") or C.bg
+    local totalWidth = 68
+    local totalHeight = 35
+    local t = gml.api.baseComponent(gui, startX, startY, totalWidth, totalHeight, "stargate", false)
+
+    t.symbolIndex = 0
+    t.symbols = {}
+    t.shouldDraw = true
+    t.connected = false
+    t.irisClosed = false
+    t.redrawRequired = false
+    t.data = {}
+    t.phase = 0
+
+    t.setData = function(self, data)
+        self.data = data or {}
+        self.connected = self.data.state == "Connected" or self.data.state == "Opening"
+        self.irisClosed = tostring(self.data.iris or "") == "Closed"
+        self:draw()
+    end
+
+    t.onIrisOpened = function(self)
+        self.irisClosed = false
+        self:draw()
+    end
+
+    t.onIrisClosed = function(self)
+        self.irisClosed = true
+        self:draw()
+    end
+
+    t.onConnected = function(self, remoteAddress)
+        self.connected = true
+        self.data.remote = remoteAddress or self.data.remote
+        if remoteAddress and self.symbolIndex == 0 then
+            for i = 1, math.min(9, #remoteAddress) do
+                self.lockSymbol(self, i, remoteAddress:sub(i, i), true)
+            end
+        end
+        self:draw()
+    end
+
+    t.onDisconnected = function(self)
+        self.connected = false
+        self.data.remote = nil
+        self:lockSymbol(0)
+        self:draw()
+    end
+
+    t.onSymbolLocked = function(self, number, symbolLetter)
+        self:lockSymbol(number, symbolLetter)
+    end
+
+    t.suspendDrawing = function(self)
+        self.shouldDraw = false
+    end
+
+    t.activateDrawing = function(self)
+        self.shouldDraw = true
+        if self.redrawRequired then
+            self:draw()
+            self.redrawRequired = false
+        end
+    end
+
+    t.lockSymbol = function(self, number, symbolLetter)
+        if number == 0 then
+            self.symbolIndex = 0
+            self.symbols = {}
+            self:draw()
+            return
+        end
+        if number >= 1 and number <= 9 then
+            self.symbolIndex = math.max(self.symbolIndex, number)
+            self.symbols[number] = symbolLetter or ""
+            self:draw()
+        end
+    end
+
+    t.draw = function(self)
+        if self:isHidden() then return end
+        if not self.shouldDraw then
+            self.redrawRequired = true
+            return
+        end
+
+        local g = self.renderTarget
+        local x = self.posX
+        local y = self.posY
+        local w = totalWidth
+        local h = totalHeight
+        local state = tostring(self.data.state or "Idle")
+        local active = state ~= "Offline" and state ~= "NO INTERFACE" and state ~= "API ERROR"
+        local dialing = state == "Dialling"
+        local pulse = (self.phase % 4) < 2
+
+        fill(g, x, y, w, h, C.panel)
+        fill(g, x, y, w, 1, C.cyan)
+        fill(g, x, y + h - 1, w, 1, C.frame)
+        fill(g, x, y, 1, h, C.frame)
+        fill(g, x + w - 1, y, 1, h, C.frame)
+        text(g, x + 2, y, "STARGATE // SGCX", C.white, C.cyan)
+        text(g, x + w - 13, y, active and "ONLINE" or "OFFLINE", active and C.green or C.red, C.cyan)
+
+        local cx = x + 28
+        local cy = y + 17
+        local rx = 21
+        local ry = 13
+
+        fill(g, cx - rx + 2, cy - ry + 2, rx * 2 - 4, ry * 2 - 4, C.black)
+        drawRing(g, cx, cy, rx, ry, active, dialing and ((self.phase * 14) % 360) or 0)
+
+        for i = 1, 39 do
+            local angle = -90 + (i - 1) * (360 / 39)
+            local gx, gy = point(cx, cy, rx - 5, ry - 4, angle)
+            local locked = self.symbols[i] ~= nil or i <= self.symbolIndex
+            drawGlyph(g, gx, gy, i, locked and C.active or C.edge, C.panel)
+        end
+
+        local engaged = tonumber(self.data.engaged or self.symbolIndex or 0) or 0
+        for i = 1, 9 do
+            local angle = -90 + (i - 1) * 40
+            drawChevron(g, cx, cy, rx + 1, ry + 1, angle, i <= engaged, pulse)
+        end
+
+        if self.irisClosed then
+            drawIris(g, cx, cy, rx - 7, ry - 5)
+        elseif state == "Connected" or state == "Opening" then
+            drawHorizon(g, cx, cy, rx - 7, ry - 5, self.phase)
+        elseif dialing then
+            text(g, cx - 6, cy, "DIALING", C.cyan, C.panel)
+            text(g, cx - 8, cy + 2, string.format("SEQUENCE %d/9", engaged), C.active, C.panel)
+        elseif state == "Idle" then
+            text(g, cx - 5, cy, "STANDBY", C.yellow, C.panel)
+        elseif state == "Closing" then
+            text(g, cx - 4, cy, "CLOSING", C.cyan, C.panel)
+        elseif not active then
+            text(g, cx - 5, cy, "NO LINK", C.red, C.panel)
+        end
+
+        local address = self.data.remote or ""
+        text(g, x + 3, y + h - 3, "REMOTE", C.muted, C.panel)
+        text(g, x + 11, y + h - 3, fit(address ~= "" and address or "—", 17), C.white, C.panel)
+        text(g, x + 34, y + h - 3, "CHEVRONS", C.muted, C.panel)
+        text(g, x + 44, y + h - 3, string.format("%d / 9", engaged), C.active, C.panel)
+        drawSideTelemetry(self)
+
+        self.visible = true
+    end
+
+    t.tick = function(self)
+        self.phase = self.phase + 1
+        if self.shouldDraw then self:draw() end
+    end
+
+    t:draw()
+    return t
+end
 
 return graphics
