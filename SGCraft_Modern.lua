@@ -30,16 +30,22 @@ local C = {
   white=0xE8F3FA, muted=0x788D9D, dim=0x3D5263
 }
 
+-- OpenComputers uses Lua 5.2. A vararg (...) cannot be referenced
+-- from inside a nested function. Copy the arguments before pcall.
 local function safeCall(fn,...)
   if type(fn) ~= "function" then return false,nil,"method unavailable" end
-  local ok,a,b,c,d = pcall(fn,...)
+  local args = {...}
+  local ok,a,b,c,d = pcall(fn, table.unpack(args))
   if ok then return true,a,b,c,d end
   return false,nil,a
 end
 
 local function call(p, name, ...)
   if not p then return false,nil,"no interface" end
-  local ok,a,b,c,d = pcall(function() return p[name](...) end)
+  local method = p[name]
+  if type(method) ~= "function" then return false,nil,"method unavailable: "..tostring(name) end
+  local args = {...}
+  local ok,a,b,c,d = pcall(method, p, table.unpack(args))
   if ok then return true,a,b,c,d end
   return false,nil,a
 end
