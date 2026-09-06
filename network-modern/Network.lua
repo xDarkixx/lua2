@@ -1,6 +1,6 @@
--- BULDACITY Modern Network API
+-- Modern Network API
 -- Centralized mode: Modern node -> Relay -> TIER3-CORE -> Relay -> destination.
--- Legacy Network.lua is intentionally untouched.
+-- Includes a compact remote UI data channel; the local Modern controllers remain untouched.
 local component=require("component")
 local serialization=require("serialization")
 local event=require("event")
@@ -9,7 +9,7 @@ local Protocol=require("network-modern.Protocol")
 local Transport=require("network-modern.Transport")
 local Registry=require("network-modern.Registry")
 
-local M={nodeId=nil,sequence=0,seen={},pending={},clientListening=false,serverListening=false,serverAddress=nil}
+local M={nodeId=nil,sequence=0,seen={},pending={},clientListening=false,serverListening=false,serverAddress=nil,uiCallback=nil}
 local SEEN_LIMIT=512
 local ACK_TIMEOUT=3
 local RETRIES=3
@@ -43,8 +43,6 @@ local function sendPacket(packet,address,broadcast)
   return false,"NO_ROUTE"
 end
 
--- Central routing is the default. Direct hardware addressing is only used
--- for the Tier-3 server itself or when explicitly requested by the caller.
 function M.send(kind,destination,payload,address)
   if not M.nodeId then local ok,err=M.init();if not ok then return false,err end end
   destination=destination or "*"
@@ -70,12 +68,25 @@ function M.sendReliable(kind,destination,payload,address)
   return true,packet.id
 end
 
-function M.hello()
-  return M.send("HELLO","*",{role="CLIENT",node=M.nodeId,central=true})
+function M.hello() return M.send("HELLO","*",{role="CLIENT",node=M.nodeId,central=true,modern=true}) end
+function M.heartbeat() return M.send("HEARTBEAT",TIER3_ID,{role="CLIENT",node=M.nodeId,central=true,modern=true}) end
+
+-- Publish a compact, browser-renderable Modern UI scene through Tier-3.
+-- This is intentionally a scene/data channel, not a raw GPU framebuffer.
+function M.publishUI(frame)
+  frame=frame or {}
+  frame.nodeId=M.nodeId
+  frame.protocol=Protocol.NAME
+  frame.version=Protocol.VERSION
+  frame.updated=os.time()
+  return M.sendReliable("UI_FRAME",TIER3_ID,frame)
 end
-function M.heartbeat()
-  return M.send("HEARTBEAT",TIER3_ID,{role="CLIENT",node=M.nodeId,central=true})
+
+function M.sendUIInput(destination,input)
+  return M.sendReliable("UI_INPUT",destination,input or {})
 end
+
+function M.setUICallback(callback) M.uiCallback=callback end
 
 local function handleAck(p)
   local d=p.payload or{};local ackId=d.ackId or d.id
@@ -100,6 +111,7 @@ function M.poll(timeout)
   if p.source==TIER3_ID then M.serverAddress=r.sender end
   if p.type=="HEARTBEAT" then Registry.heartbeat(p.source) end
   if p.type=="ACK" or p.type=="NACK" then handleAck(p) else ack(r,p) end
+  if p.type=="UI_INPUT" and M.uiCallback then pcall(M.uiCallback,p.payload,p.source,r.sender) end
   return p,r
 end
 
@@ -126,6 +138,8 @@ local function installClientListener(callback)
     elseif p.type=="PING" then
       M.serverAddress=sender
       M.send("PONG",p.source,{name=M.clientName,nodeId=M.nodeId,id=p.id},sender)
+    elseif p.type=="UI_INPUT" and M.uiCallback then
+      pcall(M.uiCallback,p.payload,p.source,sender)
     end
     if callback then pcall(callback,p,sender,distance) end
   end)
@@ -133,7 +147,7 @@ end
 
 function M.startClient(name,extra,callback)
   local ok,err=M.init();if not ok then return false,err end
-  M.clientName=name or "BULDACITY MODERN CLIENT"
+  M.clientName=name or "MODERN CLIENT"
   M.clientExtra=extra or{};M.clientExtra.name=M.clientName;M.clientExtra.role="CLIENT"
   M.clientExtra.nodeId=M.nodeId;M.clientExtra.protocol=Protocol.NAME;M.clientExtra.port=Protocol.PORT
   installClientListener(callback)
