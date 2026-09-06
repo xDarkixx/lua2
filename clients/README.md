@@ -1,36 +1,64 @@
-# BULDACITY Clients
+# BULDACITY Modern Clients
 
-Hier liegen die nach Mods/Anlagen sortierten Lua-Einstiegspunkte.
+Gemeinsame Client-Basis für alle modernen OpenComputers-Geräte. Die vorhandenen mod-spezifischen Client-Ordner bleiben erhalten.
 
-## Wichtig
+## Gemeinsame Lua-Basis
 
-Die Root-Dateien bleiben absichtlich erhalten. Die Dateien in `clients/` sind kompatible Einstiegspunkte und starten die bewährten Originalprogramme aus `/home/`.
+- `Client.lua` – Registrierung am TIER3, Heartbeat, Status, Commands und Emergency-Stop.
+- `Config.lua` – Protokoll, Port und Client-Defaults.
+- `Device.lua` – sichere OpenComputers-Hardware-Helfer.
+- `Startup.lua` – optionaler Start-Wrapper für Controller.
 
-So wird die Übersicht besser, ohne alte OpenComputers-Installationen durch geänderte Pfade zu beschädigen.
+## Architektur
 
-## Ordner
+```text
+*_Modern.lua
+    |
+    +-- clients/Client.lua
+    +-- clients/Config.lua
+    +-- clients/Device.lua
+    |
+    v
+network-modern/Network.lua
+    |
+    v
+RELAY -> TIER3-CORE
+```
 
-- `ae2/` – Applied Energistics 2
-- `bigreactors/` – Big Reactors / Extreme Reactors
-- `sgcraft/` – SGCraft
-- `diesel/` – Diesel Generator
-- `3dprinter/` – 3D Printer
-- `forestry/` – Forestry
-- `galacticraft/` – Galacticraft
-- `gendustry/` – Gendustry
-- `immersiveengineering/` – Immersive Engineering
-- `immersiveintegration/` – Immersive Integration
-- `immersiverailroading/` – Immersive Railroading
-- `industrialcraft2/` – IndustrialCraft 2
-- `logisticspipes/` – Logistics Pipes
-- `mekanism/` – Mekanism
-- `pneumaticcraft/` – PneumaticCraft
-- `projecte/` – ProjectE
-- `rftools/` – RFTools
-- `rotarycraft/` – RotaryCraft
-- `thermalexpansion/` – Thermal Expansion
-- `thermal/` – Thermal
+## Was jeder Client braucht
 
-## Netzwerk getrennt
+1. OpenComputers mit Modem.
+2. `clients/` mit der gemeinsamen Client-Basis.
+3. `network-modern/` mit `Network.lua`, `Protocol.lua`, `Transport.lua` und `Registry.lua`.
+4. Das jeweilige `*_Modern.lua` Controller-Skript.
+5. Verbindung zu Relay/TIER3.
 
-Netzwerk-Code gehört nach `network/`. Die UI bleibt davon getrennt.
+Die Hardwarelogik bleibt im jeweiligen Controller. Die gemeinsame Client-Basis übernimmt die Netzwerkkommunikation.
+
+## Vorhandene Client-Bereiche
+
+`ae2/`, `bigreactors/`, `sgcraft/`, `diesel/`, `3dprinter/`, `forestry/`, `galacticraft/`, `gendustry/`, `immersiveengineering/`, `immersiveintegration/`, `immersiverailroading/`, `industrialcraft2/`, `logisticspipes/`, `mekanism/`, `pneumaticcraft/`, `projecte/`, `rftools/`, `rotarycraft/`, `thermalexpansion/`, `thermal/`.
+
+## Netzwerkregeln
+
+- Client-zu-Client-Verkehr wird zentral über `TIER3-CORE` geroutet.
+- Modernes Netzwerk: Port `31337`, Protokoll `BULDACITY`.
+- Das alte Netzwerk auf Port `4242` bleibt getrennt.
+- Port `31337` niemals direkt ins Internet öffnen; Remote-Zugriff geht über Gateway/Bridge zum TIER3.
+
+## Beispiel
+
+```lua
+local Client=require("clients.Client")
+local ok,err=Client.start(
+  "Mein Gerät",
+  "MeinController_Modern.lua",
+  {"STATUS","CONTROL"},
+  {mod="MyMod"},
+  function(command)
+    -- Vorhandene Hardware-Steuerung aufrufen.
+    return true,"OK"
+  end
+)
+if not ok then error(err) end
+```
