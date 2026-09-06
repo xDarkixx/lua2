@@ -1,20 +1,15 @@
 -- ModernRemote.lua
 -- Companion service for existing *_Modern.lua controllers.
--- It does not modify or replace their local graphical interfaces. Instead it
--- publishes a compact remote UI scene + telemetry through the Modern network.
+-- It leaves the local Modern controllers untouched and publishes a compact,
+-- browser-renderable remote UI scene plus telemetry through the Modern network.
 local component=require("component")
 local computer=require("computer")
 local event=require("event")
 local filesystem=require("filesystem")
-local serialization=require("serialization")
 local Network=require("network-modern.Network")
 
 local INTERVAL=2
 local running=true
-local function safe(fn,...)
-  local ok,a,b=pcall(fn,...)
-  if ok then return a,b end
-end
 
 local function modernApps()
   local out={}
@@ -35,30 +30,29 @@ local function components()
     local s=tostring(ctype):lower()
     if s~="gpu" and s~="screen" and s~="modem" then
       out[#out+1]={id=address,type=ctype}
-      if #out>=24 then break end
+      if #out>=16 then break end
     end
   end
   return out
 end
 
 local function frame()
-  local gpu=component.isAvailable("gpu") and component.gpu or nil
   local w,h=80,25
-  if gpu then w,h=safe(gpu.getResolution) or 80,safe(gpu.getResolution) or 25 end
+  if component.isAvailable("gpu") then
+    local ok,a,b=pcall(component.gpu.getResolution)
+    if ok then w,h=a,b end
+  end
   return {
     kind="MODERN_REMOTE_UI",
     title="MODERN CONTROL CENTER",
     mode="REMOTE_SCENE",
-    note="UI scene/telemetry channel; local GPU framebuffer is not read.",
+    note="Remote UI scene/telemetry channel. The OpenComputers GPU framebuffer itself is not read.",
     resolution={w=w,h=h},
     uptime=computer.uptime(),
     apps=modernApps(),
     components=components(),
     network=Network.status(),
-    actions={
-      {id="refresh",label="REFRESH",action="refresh"},
-      {id="ping",label="PING NODE",action="ping"},
-    }
+    actions={{id="refresh",label="REFRESH",action="refresh"},{id="ping",label="PING NODE",action="ping"}}
   }
 end
 
