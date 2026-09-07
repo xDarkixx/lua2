@@ -1,18 +1,12 @@
--- AutoBuild.lua
--- OpenComputers 1.7.10 / 1.8.10 compatible.
--- Any pickaxe that OpenComputers can use in the robot tool slot can be used;
--- no vanilla/mod item IDs are hard-coded, so Tinkers' Construct tools are included.
+-- AutoBuild.lua - OpenComputers 1.7.10 / 1.8.10
+-- Yield-safe version. Any OC-compatible tool in the robot tool slot is accepted.
 
 local function loadNibnav()
   local ok, nav = pcall(require, "nibnav")
   if ok and nav then return nav end
   for _, path in ipairs({"/lib/nibnav.lua", "/nibnav.lua"}) do
     local f = io.open(path, "r")
-    if f then
-      f:close()
-      local ok2, loaded = pcall(dofile, path)
-      if ok2 and loaded then return loaded end
-    end
+    if f then f:close(); local ok2, loaded = pcall(dofile, path); if ok2 and loaded then return loaded end end
   end
   error("nibnav.lua not found")
 end
@@ -23,13 +17,23 @@ local robot = require("robot")
 local computer = require("computer")
 local filesystem = require("filesystem")
 
--- The robot is one block above layer 0. This avoids placing into the ground.
 local START_X, START_Y, START_Z = 0, 1, 0
 local CHARGE_X, CHARGE_Y, CHARGE_Z = 1, 1, 0
+local YIELD_EVERY = 16
 local CHARGE_WAIT_MARGIN = 100
+local workCounter = 0
+
+local function yieldNow()
+  workCounter = workCounter + 1
+  if workCounter >= YIELD_EVERY then
+    workCounter = 0
+    computer.pullSignal(0)
+  end
+end
 
 local function status(text)
   print(string.format("[%d/%d/%d] %s", nav.getX(), nav.getY(), nav.getZ(), text))
+  computer.pullSignal(0)
 end
 
 local function energyOK()
@@ -39,12 +43,12 @@ end
 
 local function moveToY(y)
   while nav.getY() < y do
-    local ok, err = nav.up()
-    if not ok then return false, err end
+    local ok, err = nav.up(); if not ok then return false, err end
+    computer.pullSignal(0)
   end
   while nav.getY() > y do
-    local ok, err = nav.down()
-    if not ok then return false, err end
+    local ok, err = nav.down(); if not ok then return false, err end
+    computer.pullSignal(0)
   end
   return true
 end
@@ -60,7 +64,9 @@ local function goToChargePoint()
   status("Energie niedrig - fahre zum Ladepunkt")
   local ok, err = goToPoint(CHARGE_X, CHARGE_Y, CHARGE_Z)
   if not ok then error(err) end
-  while not energyOK() do os.sleep(1) end
+  while not energyOK() do
+    computer.pullSignal(0)
+  end
   status("Energie ausreichend - kehre zurück")
   ok, err = goToPoint(x, y, z)
   if not ok then error(err) end
@@ -70,10 +76,8 @@ local function ensureEnergy()
   if not energyOK() then goToChargePoint() end
 end
 
--- IMPORTANT: there is deliberately no list of item IDs here.
--- Tinkers' Construct tools can have generated/NBT-based data and many materials.
--- robot.swing() uses the robot's dedicated tool slot, so the actual tool is
--- delegated to OpenComputers instead of being matched by a hard-coded ID.
+-- Do not identify by item ID: Tinkers' Construct tools use generated/NBT data.
+-- OpenComputers uses the robot's dedicated tool slot for swing operations.
 local function hasUsableTool()
   local ok, durability = pcall(robot.durability)
   return ok and type(durability) == "number" and durability > 0
@@ -81,42 +85,34 @@ end
 
 local function requirePickaxe()
   if not hasUsableTool() then
-    error("Keine verwendbare Spitzhacke im Werkzeugslot. Lege eine OpenComputers-kompatible Spitzhacke ein; Tinkers' Construct wird nicht über eine feste Item-ID ausgeschlossen.")
+    error("Keine verwendbare Spitzhacke/Werkzeug im Roboter-Werkzeugslot.")
   end
-end
-
--- Explicit mining helper. Navigation NEVER swings, so it cannot randomly
--- break blocks or collect unwanted drops.
-local function mineForward()
-  ensureEnergy()
-  requirePickaxe()
-  return robot.swing()
 end
 
 local function readModel(path)
   local f = io.open(path, "r")
   if not f then error("Could not open model: " .. path) end
-  local data = f:read("*a")
-  f:close()
-
+  local data = f:read("*a"); f:close()
   local lines = {}
-  for line in data:gmatch("([^\r\n]+)") do lines[#lines + 1] = line end
+  for line in data:gmatch("([^\r\n]+)") do
+    lines[#lines + 1] = line
+    yieldNow()
+  end
   if #lines == 0 then error("Model file is empty: " .. path) end
 
-  local dimX, dimY, dimZ
-  local start = 1
-  for i = 1, math.min(#lines, 20) do
+  local dimX, dimY, dimZ, start = nil, nil, nil, 1
+  for i = 1, math.min(#lines, 30) do
     local x, y, z = lines[i]:match("dim%s+(%d+)%s+(%d+)%s+(%d+)")
     if x then dimX, dimY, dimZ = tonumber(x), tonumber(y), tonumber(z) end
     if lines[i] == "data" then start = i + 1; break end
+    yieldNow()
   end
   if not dimX then error("Invalid binvox model: missing dim line") end
 
   local voxels, idx = {}, 1
   for i = start, #lines do
     for value in lines[i]:gmatch("[01]") do
-      voxels[idx] = tonumber(value)
-      idx = idx + 1
+      voxels[idx] = tonumber(value); idx = idx + 1; yieldNow()
     end
   end
   return dimX, dimY, dimZ, voxels
@@ -126,6 +122,7 @@ local function findModels()
   local result = {}
   for name in filesystem.list("/home") do
     if name:sub(-4):lower() == ".txt" then result[#result + 1] = "/home/" .. name end
+    yieldNow()
   end
   table.sort(result)
   return result
@@ -136,7 +133,7 @@ local function chooseModel()
   if #models == 0 then error("No .txt files found in /home. Put a binvox .txt model there.") end
   if #models == 1 then return models[1] end
   print("Gefundene Modelle:")
-  for i = 1, #models do print(string.format("%d) %s", i, models[i])) end
+  for i = 1, #models do print(string.format("%d) %s", i, models[i])); yieldNow() end
   io.write("Nummer wählen: ")
   local n = tonumber(io.read())
   if not n or not models[n] then error("Ungültige Auswahl") end
@@ -148,14 +145,10 @@ local function refill()
   status("Material leer - fahre zum Lade-/Nachfüllpunkt")
   local ok, err = goToPoint(CHARGE_X, CHARGE_Y, CHARGE_Z)
   if not ok then error(err) end
-
   for slot = 2, robot.inventorySize() do
-    if robot.space(slot) > 0 then
-      robot.select(slot)
-      robot.suck(64)
-    end
+    if robot.space(slot) > 0 then robot.select(slot); robot.suck(64) end
+    yieldNow()
   end
-
   status("Material nachgefüllt - kehre zurück")
   ok, err = goToPoint(oldX, oldY, oldZ)
   if not ok then error(err) end
@@ -163,27 +156,22 @@ end
 
 local function findBuildingSlot()
   for slot = 2, robot.inventorySize() do
-    if robot.count(slot) > 1 then return slot end
+    local count = robot.count(slot)
+    if count > 1 then return slot end
+    yieldNow()
   end
 end
 
 local function placeBlock()
   ensureEnergy()
   local slot = findBuildingSlot()
-  if not slot then
-    refill()
-    slot = findBuildingSlot()
-  end
+  if not slot then refill(); slot = findBuildingSlot() end
   if not slot then error("Kein Baumaterial vorhanden.") end
-
-  -- Keep inventory-safe behavior: occupied targets are NOT broken.
-  if robot.detectDown() then
-    error("Cannot place block: target position is occupied. No block was broken.")
-  end
-
+  if robot.detectDown() then error("Cannot place block: target position is occupied. No block was broken.") end
   robot.select(slot)
   local ok, reason = robot.placeDown()
   if not ok then error("Block konnte nicht platziert werden: " .. tostring(reason)) end
+  computer.pullSignal(0)
 end
 
 local function build(modelPath)
@@ -197,31 +185,22 @@ local function build(modelPath)
       for step = 0, sizeX - 1 do
         local x = reverse and (sizeX - 1 - step) or step
         local index = x + z * sizeX + y * sizeX * sizeZ + 1
-        if voxels[index] == 1 then placeBlock() end
+        if voxels[index] == 1 then placeBlock() else yieldNow() end
         if step < sizeX - 1 then
-          local ok, err = nav.forward()
-          if not ok then error(err) end
+          local ok, err = nav.forward(); if not ok then error(err) end
         end
+        yieldNow()
       end
-
       if z < sizeZ - 1 then
-        if reverse then
-          nav.turnLeft()
-          local ok, err = nav.forward()
-          if not ok then error(err) end
-          nav.turnLeft()
-        else
-          nav.turnRight()
-          local ok, err = nav.forward()
-          if not ok then error(err) end
-          nav.turnRight()
-        end
+        if reverse then nav.turnLeft() else nav.turnRight() end
+        local ok, err = nav.forward(); if not ok then error(err) end
+        if reverse then nav.turnLeft() else nav.turnRight() end
+        computer.pullSignal(0)
       end
     end
-
     if y < sizeY - 1 then
-      local ok, err = nav.up()
-      if not ok then error(err) end
+      local ok, err = nav.up(); if not ok then error(err) end
+      computer.pullSignal(0)
     end
   end
   status("Aufbau abgeschlossen")
@@ -229,7 +208,8 @@ end
 
 local model = chooseModel()
 print("Modell: " .. model)
-print("Werkzeug: Vanilla und modded Spitzhacken, einschließlich Tinkers' Construct.")
+print("Werkzeug: Vanilla + modded + Tinkers' Construct")
 print("Start: X=" .. START_X .. " Y=" .. START_Y .. " Z=" .. START_Z)
 print("Lade-/Nachfüllpunkt: X=" .. CHARGE_X .. " Y=" .. CHARGE_Y .. " Z=" .. CHARGE_Z)
+computer.pullSignal(0)
 build(model)
