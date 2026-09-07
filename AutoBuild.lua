@@ -38,24 +38,28 @@ local function explode(div, str)
   return result
 end
 
--- Slot 1 is reserved for the chest. Every other slot is filled from the chest
--- above the robot until it is completely full (normally 64 blocks).
+-- Slot 1 is reserved for the chest. Slots 2..N are building material.
+-- Refill only slots that are not already full. No repeated "slot full"
+-- status messages are printed.
 local function refill()
   robot.select(1)
   robot.swingUp()
   robot.placeUp()
 
   for slot = 2, robot.inventorySize() do
-    if robot.space(slot) > 0 then
+    local free = robot.space(slot)
+    if free > 0 then
       robot.select(slot)
-      print("Filling Slot " .. tostring(slot) .. " (" .. tostring(robot.count()) .. "/64)")
       while robot.space() > 0 do
         local before = robot.count()
         local sucked = robot.suckUp(robot.space())
-        if not sucked and robot.count() == before then
-          os.sleep(5)
+        local after = robot.count()
+
+        if after == before and not sucked then
+          break
         end
-        if robot.count() == before and not sucked then
+
+        if after >= 64 then
           break
         end
       end
