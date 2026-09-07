@@ -1,6 +1,7 @@
 -- AutoBuild.lua
 -- OpenComputers-MC1.7.10-1.8.10+667626d
 -- Uses nibnav.lua and automatically finds TXT model files in /home.
+-- Inventory safe: slot 1 is reserved for the chest, slots 2..N are building blocks.
 
 local function loadNibnav()
   local ok, nav = pcall(require, "nibnav")
@@ -37,42 +38,71 @@ local function explode(div, str)
   return result
 end
 
+-- Slot 1 is reserved for the chest. Every other slot is filled from the chest
+-- above the robot until it is completely full (normally 64 blocks).
 local function refill()
   robot.select(1)
   robot.swingUp()
   robot.placeUp()
+
   for slot = 2, robot.inventorySize() do
     if robot.space(slot) > 0 then
       robot.select(slot)
-      print("Filling Slot " .. tostring(slot))
-      repeat
-        local before = robot.space()
+      print("Filling Slot " .. tostring(slot) .. " (" .. tostring(robot.count()) .. "/64)")
+      while robot.space() > 0 do
+        local before = robot.count()
         local sucked = robot.suckUp(robot.space())
-        if not sucked or robot.space() == before then os.sleep(5) end
-      until robot.space() < 1
+        if not sucked and robot.count() == before then
+          os.sleep(5)
+        end
+        if robot.count() == before and not sucked then
+          break
+        end
+      end
     end
   end
+
   robot.select(1)
   robot.swingUp()
   robot.select(2)
 end
 
+-- Never break the block below the robot. This prevents drops from entering
+-- the inventory and keeps the inventory clean.
 local function placeBlock()
+  local findSlot = 0
+
   if robot.count() < 2 then
-    local findSlot = 0
     for slot = 2, robot.inventorySize() do
       if robot.count(slot) > 1 then
         findSlot = slot
         break
       end
     end
+
     if findSlot < 1 then
       refill()
-      findSlot = 2
+      for slot = 2, robot.inventorySize() do
+        if robot.count(slot) > 1 then
+          findSlot = slot
+          break
+        end
+      end
+    end
+
+    if findSlot < 1 then
+      error("No building blocks available in slots 2.." .. robot.inventorySize())
     end
     robot.select(findSlot)
   end
-  repeat robot.swingDown() until robot.placeDown()
+
+  if robot.detectDown() then
+    error("Cannot place block: target position is occupied. No block was broken.")
+  end
+
+  if not robot.placeDown() then
+    error("Could not place building block without breaking the target block.")
+  end
 end
 
 local function refuel(lastY)
@@ -105,7 +135,6 @@ local function readBinvox(file)
   return maxx, maxy, maxz
 end
 
--- Find every .txt file directly in /home.
 local function findTextFiles()
   local files = {}
   local ok, iterator = pcall(filesystem.list, "/home")
@@ -124,7 +153,6 @@ local function findTextFiles()
   return files
 end
 
--- Select a model. If there is only one TXT file, use it automatically.
 local function openModel()
   local files = findTextFiles()
   if #files == 0 then
