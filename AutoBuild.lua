@@ -1,7 +1,7 @@
 -- AutoBuild.lua
 -- OpenComputers-MC1.7.10-1.8.10+667626d
--- Uses nibnav.lua and automatically finds TXT model files in /home.
--- Inventory safe: slot 1 is reserved for the chest, slots 2..N are building blocks.
+-- Shows current layer/position and returns to the charging/refill point when low.
+-- Slot 1 is reserved for the chest. Slots 2..N are building blocks.
 
 local function loadNibnav()
   local ok, nav = pcall(require, "nibnav")
@@ -23,7 +23,20 @@ local robot = require("robot")
 local computer = require("computer")
 local filesystem = require("filesystem")
 
-nav.setPosition(0, 0, 0, sides.east)
+-- The build origin is (0,0,0). The refill/charging point is kept one block
+-- in front of it so the robot can leave the build area free.
+local START_X, START_Y, START_Z = 0, 0, 0
+local CHARGE_X, CHARGE_Y, CHARGE_Z = 1, 0, 0
+
+nav.setPosition(START_X, START_Y, START_Z, sides.east)
+
+local currentLayer = 0
+local maxLayer = 0
+
+local function status(message)
+  print(string.format("[AutoBuild] Ebene %d/%d | Position X:%d Y:%d Z:%d | %s",
+    currentLayer + 1, maxLayer, nav.getX(), nav.getY(), nav.getZ(), message or ""))
+end
 
 local function explode(div, str)
   if div == "" then return false end
@@ -38,30 +51,30 @@ local function explode(div, str)
   return result
 end
 
--- Slot 1 is reserved for the chest. Slots 2..N are building material.
--- Refill only slots that are not already full. No repeated "slot full"
--- status messages are printed.
+-- Fills only non-full material slots. No repeated "slot full" messages.
 local function refill()
+  status("Material wird aufgefüllt")
+  local oldX, oldY, oldZ = nav.getX(), nav.getY(), nav.getZ()
+
+  -- Go to the dedicated refill/charging point first.
+  local ok, err = nav.moveXZ(CHARGE_X, CHARGE_Z)
+  if not ok then error(err or "Could not reach charging/refill point") end
+  ok, err = nav.moveY(CHARGE_Y)
+  if not ok then error(err or "Could not reach charging/refill height") end
+
   robot.select(1)
   robot.swingUp()
   robot.placeUp()
 
   for slot = 2, robot.inventorySize() do
-    local free = robot.space(slot)
-    if free > 0 then
+    if robot.space(slot) > 0 then
       robot.select(slot)
       while robot.space() > 0 do
         local before = robot.count()
         local sucked = robot.suckUp(robot.space())
         local after = robot.count()
-
-        if after == before and not sucked then
-          break
-        end
-
-        if after >= 64 then
-          break
-        end
+        if after == before and not sucked then break end
+        if after >= 64 then break end
       end
     end
   end
@@ -69,6 +82,13 @@ local function refill()
   robot.select(1)
   robot.swingUp()
   robot.select(2)
+
+  -- Return to the exact position where the robot left the build.
+  ok, err = nav.moveY(oldY)
+  if not ok then error(err or "Could not restore build height") end
+  ok, err = nav.moveXZ(oldX, oldZ)
+  if not ok then error(err or "Could not return to build position") end
+  status("Material aufgefüllt")
 end
 
 -- Never break the block below the robot. This prevents drops from entering
@@ -109,15 +129,27 @@ local function placeBlock()
   end
 end
 
+-- Return to the dedicated charging point whenever energy is low, recharge,
+-- then return to the exact build position.
 local function refuel(lastY)
-  print("Need to refuel, going to 0,0,0")
-  local ok, err = nav.moveXZ(0, 0)
-  if not ok then error(err or "Could not return to refill position") end
-  ok, err = nav.moveY(0)
-  if not ok then error(err or "Could not return to refill height") end
-  while computer.maxEnergy() - computer.energy() > 100 do os.sleep(1) end
-  ok, err = nav.moveY(lastY)
+  status("Energie niedrig - gehe zum Charging Point")
+  local oldX, oldY, oldZ = nav.getX(), nav.getY(), nav.getZ()
+
+  local ok, err = nav.moveXZ(CHARGE_X, CHARGE_Z)
+  if not ok then error(err or "Could not reach charging point") end
+  ok, err = nav.moveY(CHARGE_Y)
+  if not ok then error(err or "Could not reach charging height") end
+
+  status("Lade Energie auf")
+  while computer.maxEnergy() - computer.energy() > 100 do
+    os.sleep(1)
+  end
+
+  ok, err = nav.moveY(oldY)
   if not ok then error(err or "Could not restore build height") end
+  ok, err = nav.moveXZ(oldX, oldZ)
+  if not ok then error(err or "Could not return to build position") end
+  status("Zurück am Baupunkt")
 end
 
 local function readBinvox(file)
@@ -192,10 +224,14 @@ end
 local file = openModel()
 local ok, runError = pcall(function()
   local maxx, maxy, maxz = readBinvox(file)
+  maxLayer = maxy
   local layer = {}
 
+  status("Start - Charging Point bei X:1 Y:0 Z:0")
+
   for y = 0, maxy - 1 do
-    print("Ebene " .. tostring(y))
+    currentLayer = y
+    status("Starte Ebene")
     for z = 1, maxz do
       local line = file:read("*l")
       if not line then error("Unexpected end of model at y=" .. y .. ", z=" .. z) end
@@ -220,27 +256,30 @@ local ok, runError = pcall(function()
       end
 
       if nextX and nextZ then
+        status("Gehe zu Block X:" .. nextX .. " Z:" .. nextZ)
         local moveOK, moveError = nav.moveXZ(nextX, nextZ)
         if not moveOK then error(moveError or "Unable to reach next block") end
         placeBlock()
         layer[nextZ][nextX] = "0"
         findings = findings - 1
-        if computer.energy() < nav.getCost(0, 0, 0) + maxx * 3 * 15 + 10 then
+
+        if computer.energy() < nav.getCost(CHARGE_X, CHARGE_Y, CHARGE_Z) + maxx * 3 * 15 + 10 then
           refuel(y)
         end
         os.sleep(0.1)
       end
     end
 
-    local upOK, upError = nav.up()
-    if not upOK then error(upError or "Unable to move to next layer") end
+    if y < maxy - 1 then
+      local upOK, upError = nav.up()
+      if not upOK then error(upError or "Unable to move to next layer") end
+    end
   end
 
-  file:close()
-  file = nil
-  local moveOK, moveError = nav.moveXZ(0, 0)
+  status("Bau fertig - Rückkehr zum Start")
+  local moveOK, moveError = nav.moveXZ(START_X, START_Z)
   if not moveOK then error(moveError or "Unable to return home") end
-  moveOK, moveError = nav.moveY(0)
+  moveOK, moveError = nav.moveY(START_Y)
   if not moveOK then error(moveError or "Unable to return to base height") end
   nav.faceSide(sides.east)
 end)
