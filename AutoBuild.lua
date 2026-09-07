@@ -1,7 +1,6 @@
 -- AutoBuild.lua - OpenComputers 1.7.10 / 1.8.10
--- Automatic builder with a temporary overhead refill container.
+-- Automatic builder with a 2-block START safety zone in every direction.
 -- Slot 1 = the user's container. Slots 2+ = building material.
--- START is never a building position.
 -- The container is placed ABOVE the robot at the refill point, used, then broken and recovered.
 
 local function loadNibnav()
@@ -24,8 +23,15 @@ local robot = require("robot")
 local computer = require("computer")
 local filesystem = require("filesystem")
 
+-- Physical start point. Nothing is ever built in its 2-block safety zone.
 local START_X, START_Y, START_Z = 0, 1, 0
-local REFILL_X, REFILL_Y, REFILL_Z = 0, 1, 1
+local SAFETY = 2
+
+-- Refill point is outside the horizontal safety zone.
+local REFILL_X, REFILL_Y, REFILL_Z = START_X, START_Y, START_Z + SAFETY + 1
+
+-- First build voxel is also outside the safety zone in X, Y and Z.
+local BUILD_X, BUILD_Y, BUILD_Z = START_X + SAFETY + 1, START_Y + SAFETY + 1, START_Z + SAFETY + 1
 
 local function yieldNow() computer.pullSignal(0) end
 
@@ -145,7 +151,7 @@ local function findBuildingSlot()
 end
 
 -- Slot 1 is the container. It is temporarily placed ABOVE the robot.
--- OpenComputers supports placeUp/suckUp/swingUp on the robot component.
+-- Material is sucked from above into slots 2+ and the container is recovered.
 local function refill()
   local oldX, oldY, oldZ = nav.getX(), nav.getY(), nav.getZ()
 
@@ -157,10 +163,9 @@ local function refill()
     error("Slot 1 ist leer. Lege dort deinen Container ein.")
   end
 
-  -- The container is ALWAYS placed directly above the robot.
   robot.select(1)
   if robot.detectUp() then
-    error("Über dem Nachfüllpunkt ist bereits ein Block. Dort kann der Container nicht aufgestellt werden.")
+    error("Über dem Nachfüllpunkt ist bereits ein Block. Container kann dort nicht aufgestellt werden.")
   end
 
   local placed, reason = robot.placeUp()
@@ -169,32 +174,32 @@ local function refill()
   end
   yieldNow()
 
-  -- Pull building material DOWN from the overhead container into slots 2+.
   local before = materialCount()
   local gotMaterial = false
+
   for _ = 1, 32 do
     local target = findBuildingSlot() or 2
     if target == 1 then target = 2 end
     robot.select(target)
-    local sucked = pcall(robot.suckUp, 64)
+    local callOK, sucked = pcall(robot.suckUp, 64)
     yieldNow()
-    if sucked and materialCount() > before then
+    if callOK and sucked and materialCount() > before then
       gotMaterial = true
       break
     end
   end
 
-  -- The overhead container is the only block we remove here.
+  -- Remove only the temporary container placed above the robot.
   robot.select(1)
   if robot.detectUp() then
-    local broken = pcall(robot.swingUp)
+    local callOK, broken = pcall(robot.swingUp)
     yieldNow()
-    if not broken then
+    if not callOK or broken == false then
       error("Der Container über dem Roboter konnte nicht abgebaut werden.")
     end
   end
 
-  -- Recover the container into slot 1 if it dropped above/near the robot.
+  -- Recover the container into slot 1.
   if robot.count(1) == 0 then
     robot.select(1)
     pcall(robot.suckUp, 64)
@@ -221,7 +226,12 @@ local function placeBlock()
   end
   if not slot then error("Kein Baumaterial vorhanden.") end
 
-  -- Never break an existing block at the build target.
+  -- Extra hard safety: never place inside the 2-block 3D START zone.
+  local x, y, z = nav.getX(), nav.getY(), nav.getZ() - 1
+  if math.abs(x - START_X) <= SAFETY and math.abs(y - START_Y) <= SAFETY and math.abs(z - START_Z) <= SAFETY then
+    error("SICHERHEIT: Startbereich (2 Blöcke in alle Richtungen) bleibt frei.")
+  end
+
   if robot.detectDown() then
     error("Ziel ist bereits belegt. Es wird NICHT abgebaut.")
   end
@@ -238,17 +248,16 @@ local function build(modelPath)
   requirePickaxe()
   local sizeX, sizeY, sizeZ, voxels = readModel(modelPath)
 
+  -- We know the robot is physically at START after initial refill.
   nav.setPosition(START_X, START_Y, START_Z, sides.east)
-
-  -- Fill once before building. START remains completely free.
   refill()
 
-  if sizeX > 0 then
-    local ok, err = nav.faceSide(sides.east)
-    if not ok then error(err) end
-    ok, err = nav.forward()
-    if not ok then error(err) end
-  end
+  -- Move the robot to the first build position.
+  -- This is 3 blocks away from START on X, Y and Z, leaving 2 full blocks clear.
+  status("2-Block-Sicherheitsbereich: fahre zum ersten Baupunkt")
+  local ok, err = goToPoint(BUILD_X, BUILD_Y, BUILD_Z)
+  if not ok then error(err) end
+  nav.setPosition(BUILD_X, BUILD_Y, BUILD_Z, sides.east)
 
   for y = 0, sizeY - 1 do
     status(string.format("Ebene %d/%d", y + 1, sizeY))
@@ -263,43 +272,45 @@ local function build(modelPath)
         if voxels[index] == 1 then placeBlock() end
 
         if step < sizeX - 1 then
-          local ok, moveErr = nav.forward()
-          if not ok then error(moveErr) end
+          local okMove, moveErr = nav.forward()
+          if not okMove then error(moveErr) end
         end
         yieldNow()
       end
 
       if z < sizeZ - 1 then
-        local ok, err
+        local okTurn, turnErr
         if reverse then
-          ok, err = nav.turnLeft(); if not ok then error(err) end
-          ok, err = nav.forward(); if not ok then error(err) end
-          ok, err = nav.turnLeft(); if not ok then error(err) end
+          okTurn, turnErr = nav.turnLeft(); if not okTurn then error(turnErr) end
+          okTurn, turnErr = nav.forward(); if not okTurn then error(turnErr) end
+          okTurn, turnErr = nav.turnLeft(); if not okTurn then error(turnErr) end
         else
-          ok, err = nav.turnRight(); if not ok then error(err) end
-          ok, err = nav.forward(); if not ok then error(err) end
-          ok, err = nav.turnRight(); if not ok then error(err) end
+          okTurn, turnErr = nav.turnRight(); if not okTurn then error(turnErr) end
+          okTurn, turnErr = nav.forward(); if not okTurn then error(turnErr) end
+          okTurn, turnErr = nav.turnRight(); if not okTurn then error(turnErr) end
         end
         yieldNow()
       end
     end
 
     if y < sizeY - 1 then
-      local ok, err = nav.up()
-      if not ok then error(err) end
+      local okUp, errUp = nav.up()
+      if not okUp then error(errUp) end
       yieldNow()
     end
   end
 
-  status("Aufbau abgeschlossen - STARTPUNKT blieb frei")
+  status("Aufbau abgeschlossen - 2-Block-Startbereich blieb frei")
 end
 
 local model = chooseModel()
 print("Modell: " .. model)
-print("Slot 1: dein Container -> wird ÜBER dem Roboter aufgestellt")
+print("Slot 1: Container -> wird ÜBER dem Roboter aufgestellt")
 print("Slots 2+: Baumaterial")
-print("START:  X=" .. START_X .. " Y=" .. START_Y .. " Z=" .. START_Z .. " -> niemals bauen")
+print("START:  X=" .. START_X .. " Y=" .. START_Y .. " Z=" .. START_Z)
+print("SICHERHEIT: 2 Blöcke in X/Y/Z bleiben frei")
 print("REFILL: X=" .. REFILL_X .. " Y=" .. REFILL_Y .. " Z=" .. REFILL_Z)
+print("BAUSTART: X=" .. BUILD_X .. " Y=" .. BUILD_Y .. " Z=" .. BUILD_Z)
 print("Starte automatische Nachfüllung...")
 yieldNow()
 build(model)
