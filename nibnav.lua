@@ -1,9 +1,10 @@
 -- nibnav.lua
 -- OpenComputers-MC1.7.10-1.8.10+667626d compatible navigation helper.
--- Inventory-safe mode: NEVER breaks blocks while navigating, so no drops are collected.
+-- Inventory-safe mode: NEVER breaks blocks while navigating.
 
 local robot = require("robot")
 local sides = require("sides")
+local computer = require("computer")
 
 local nibnav = {}
 local NORTH = sides.north
@@ -13,7 +14,11 @@ local WEST  = sides.west
 local POS_X = sides.posx or EAST
 local NEG_X = sides.negx or WEST
 local POS_Z = sides.posz or SOUTH
-local NEG_Z = sides.negz or NORTH
+local NEG_Z = sides.posz and sides.negz or NORTH
+
+local function yieldNow()
+  computer.pullSignal(0)
+end
 
 nibnav.sideLookup = {
   turn = {
@@ -40,13 +45,16 @@ local position = {x = 0, y = 0, z = 0, facing = NORTH}
 
 local function action(actionFn, afterFn, ...)
   local ok, err = actionFn()
+  yieldNow()
   if ok and afterFn then afterFn(...) end
+  yieldNow()
   return ok, err
 end
 
 local function repeatAction(times, fn, ...)
   for _ = 1, times do
     local ok, err = fn(...)
+    yieldNow()
     if not ok then return nil, err end
   end
   return true
@@ -54,6 +62,7 @@ end
 
 local function protected(fn, ...)
   local ok, result = pcall(fn, ...)
+  yieldNow()
   if ok then return true end
   return nil, result
 end
@@ -67,7 +76,6 @@ function nibnav.getFacingFromSide(side)
 end
 
 function nibnav.getPosition() return position.x, position.y, position.z end
--- Compatibility getters for older AutoBuild versions.
 function nibnav.getX() return position.x end
 function nibnav.getY() return position.y end
 function nibnav.getZ() return position.z end
