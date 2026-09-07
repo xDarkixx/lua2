@@ -1,5 +1,7 @@
 -- AutoBuild.lua - OpenComputers 1.7.10 / 1.8.10
--- Watchdog-safe builder. All long loops yield to the OC event loop.
+-- Watchdog-safe builder. Long loops yield to the OC event loop.
+-- Slot 1 is reserved for the user's optional container/chest item.
+-- The refill station accepts ANY inventory container; no chest ID is hard-coded.
 
 local function loadNibnav()
   local ok, nav = pcall(require, "nibnav")
@@ -59,8 +61,11 @@ local function goToChargePoint()
   status("Energie niedrig - fahre zum Ladepunkt")
   local ok, err = goToPoint(CHARGE_X, CHARGE_Y, CHARGE_Z)
   if not ok then error(err) end
-  while not energyOK() do yieldNow() end
-  status("Energie ausreichend - kehre zurück")
+
+  -- The refill point is a MATERIAL station, not an energy charger.
+  -- Never wait forever here for energy to change.
+  status("Ladepunkt erreicht - Energie wird nicht vorausgesetzt")
+
   ok, err = goToPoint(x, y, z)
   if not ok then error(err) end
 end
@@ -69,8 +74,8 @@ local function ensureEnergy()
   if not energyOK() then goToChargePoint() end
 end
 
--- No item IDs are hard-coded. This keeps vanilla, modded and Tinkers' Construct
--- tools usable through the OpenComputers robot tool slot.
+-- No item IDs are hard-coded. Vanilla, modded and Tinkers' tools work
+-- through the OpenComputers robot tool slot as long as OC reports durability.
 local function hasUsableTool()
   local ok, durability = pcall(robot.durability)
   return ok and type(durability) == "number" and durability > 0
@@ -138,15 +143,60 @@ local function chooseModel()
   return models[n]
 end
 
+local function materialCount()
+  local total = 0
+  for slot = 2, robot.inventorySize() do
+    total = total + robot.count(slot)
+    yieldNow()
+  end
+  return total
+end
+
+-- Try every side of the robot. This deliberately does NOT check for a
+-- particular chest ID: any OpenComputers-compatible inventory can be used.
+local function suckAnyContainer()
+  local before = materialCount()
+  local directions = {
+    {"front", function() return robot.suck(64) end},
+    {"up", function() return robot.suckUp(64) end},
+    {"down", function() return robot.suckDown(64) end}
+  }
+
+  for _, entry in ipairs(directions) do
+    local ok = pcall(entry[2])
+    yieldNow()
+    if ok and materialCount() > before then return true end
+  end
+
+  -- Check the three other horizontal directions without requiring a
+  -- specific container type.
+  for _ = 1, 3 do
+    local turned = robot.turnRight()
+    yieldNow()
+    if turned then
+      local ok = pcall(robot.suck, 64)
+      yieldNow()
+      if ok and materialCount() > before then return true end
+    end
+  end
+  return false
+end
+
 local function refill()
   local oldX, oldY, oldZ = nav.getX(), nav.getY(), nav.getZ()
   status("Material leer - fahre zum Lade-/Nachfüllpunkt")
   local ok, err = goToPoint(CHARGE_X, CHARGE_Y, CHARGE_Z)
   if not ok then error(err) end
-  for slot = 2, robot.inventorySize() do
-    if robot.space(slot) > 0 then robot.select(slot); robot.suck(64) end
-    yieldNow()
+
+  -- Slot 1 is intentionally ignored for building material. It may contain
+  -- ANY kind of chest/container supplied by the user. The station itself is
+  -- detected by trying the robot inventory API from all sides.
+  robot.select(1)
+  local gotMaterial = suckAnyContainer()
+  if not gotMaterial then
+    error("Kein Material am Nachfüllpunkt gefunden. Stelle irgendeinen Container mit Baumaterial an den Nachfüllpunkt.")
   end
+
   status("Material nachgefüllt - kehre zurück")
   ok, err = goToPoint(oldX, oldY, oldZ)
   if not ok then error(err) end
@@ -154,7 +204,7 @@ end
 
 local function findBuildingSlot()
   for slot = 2, robot.inventorySize() do
-    if robot.count(slot) > 1 then return slot end
+    if robot.count(slot) > 0 then return slot end
     yieldNow()
   end
 end
@@ -172,6 +222,7 @@ local function placeBlock()
 end
 
 local function build(modelPath)
+  requirePickaxe()
   local sizeX, sizeY, sizeZ, voxels = readModel(modelPath)
   nav.setPosition(START_X, START_Y, START_Z, sides.east)
 
@@ -184,19 +235,19 @@ local function build(modelPath)
         local index = x + z * sizeX + y * sizeX * sizeZ + 1
         if voxels[index] == 1 then placeBlock() end
         if step < sizeX - 1 then
-          local ok, err = nav.forward(); if not ok then error(err) end
+          local ok, moveErr = nav.forward(); if not ok then error(moveErr) end
         end
         yieldNow()
       end
       if z < sizeZ - 1 then
         if reverse then nav.turnLeft() else nav.turnRight() end
-        local ok, err = nav.forward(); if not ok then error(err) end
+        local ok, moveErr = nav.forward(); if not ok then error(moveErr) end
         if reverse then nav.turnLeft() else nav.turnRight() end
         yieldNow()
       end
     end
     if y < sizeY - 1 then
-      local ok, err = nav.up(); if not ok then error(err) end
+      local ok, moveErr = nav.up(); if not ok then error(moveErr) end
       yieldNow()
     end
   end
@@ -206,6 +257,7 @@ end
 local model = chooseModel()
 print("Modell: " .. model)
 print("Werkzeug: Vanilla + modded + Tinkers' Construct")
+print("Slot 1: optionaler Container - Typ egal")
 print("Start: X=" .. START_X .. " Y=" .. START_Y .. " Z=" .. START_Z)
 print("Lade-/Nachfüllpunkt: X=" .. CHARGE_X .. " Y=" .. CHARGE_Y .. " Z=" .. CHARGE_Z)
 yieldNow()
