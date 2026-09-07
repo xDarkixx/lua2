@@ -1,17 +1,15 @@
 -- nibnav.lua
 -- OpenComputers-MC1.7.10-1.8.10+667626d compatible navigation helper.
--- Keeps a tracked relative X/Y/Z position and facing direction.
+-- Inventory-safe mode: NEVER breaks blocks while navigating, so no drops are collected.
 
 local robot = require("robot")
 local sides = require("sides")
 
 local nibnav = {}
-
 local NORTH = sides.north
 local SOUTH = sides.south
 local EAST  = sides.east
 local WEST  = sides.west
-
 local POS_X = sides.posx or EAST
 local NEG_X = sides.negx or WEST
 local POS_Z = sides.posz or SOUTH
@@ -27,8 +25,8 @@ nibnav.sideLookup = {
   translation = {
     [NORTH] = {[sides.front] = NORTH, [sides.back] = SOUTH, [sides.left] = WEST, [sides.right] = EAST},
     [SOUTH] = {[sides.front] = SOUTH, [sides.back] = NORTH, [sides.left] = EAST, [sides.right] = WEST},
-    [EAST]  = {[sides.front] = EAST,  [sides.back] = WEST,  [sides.left] = NORTH, [sides.right] = SOUTH},
-    [WEST]  = {[sides.front] = WEST,  [sides.back] = EAST,  [sides.left] = SOUTH, [sides.right] = NORTH}
+    [EAST]  = {[sides.front] = EAST, [sides.back] = WEST, [sides.left] = NORTH, [sides.right] = SOUTH},
+    [WEST]  = {[sides.front] = WEST, [sides.back] = EAST, [sides.left] = SOUTH, [sides.right] = NORTH}
   },
   offsets = {
     [sides.down] = {0, -1, 0}, [sides.up] = {0, 1, 0},
@@ -60,9 +58,7 @@ local function protected(fn, ...)
   return nil, result
 end
 
-function nibnav.getFacing()
-  return position.facing
-end
+function nibnav.getFacing() return position.facing end
 
 function nibnav.getFacingFromSide(side)
   if side == sides.up or side == sides.down then return side end
@@ -71,9 +67,7 @@ function nibnav.getFacingFromSide(side)
   return lookup[side]
 end
 
-function nibnav.getPosition()
-  return position.x, position.y, position.z
-end
+function nibnav.getPosition() return position.x, position.y, position.z end
 
 function nibnav.turnLeft()
   local newFacing = nibnav.sideLookup.translation[position.facing][sides.left]
@@ -101,9 +95,11 @@ function nibnav.faceSide(side)
   return nibnav.turnLeft()
 end
 
+-- Important: do NOT swing/break blocks while moving.
+-- This prevents cobblestone, dirt, plants, etc. from entering the inventory.
 function nibnav.forward()
-  while robot.detect() do
-    if not robot.swing() then break end
+  if robot.detect() then
+    return nil, "Path blocked: front block was not broken (inventory-safe mode)"
   end
   return action(robot.forward, function()
     if position.facing == POS_X then position.x = position.x + 1
@@ -123,15 +119,15 @@ function nibnav.back()
 end
 
 function nibnav.up()
-  while robot.detectUp() do
-    if not robot.swingUp() then break end
+  if robot.detectUp() then
+    return nil, "Path blocked: block above was not broken (inventory-safe mode)"
   end
   return action(robot.up, function() position.y = position.y + 1 end)
 end
 
 function nibnav.down()
-  while robot.detectDown() do
-    if not robot.swingDown() then break end
+  if robot.detectDown() then
+    return nil, "Path blocked: block below was not broken (inventory-safe mode)"
   end
   return action(robot.down, function() position.y = position.y - 1 end)
 end
@@ -142,7 +138,6 @@ function nibnav.move(direction, distance, wrapper)
   if distance <= 0 then return true end
   wrapper = wrapper or function(moveFn) return moveFn() end
   assert(type(wrapper) == "function", "wrapper must be a function")
-
   return protected(function()
     local moveFn
     if direction == sides.up then
@@ -162,8 +157,7 @@ end
 
 function nibnav.moveX(x, wrapper)
   x = tonumber(x); assert(x, "x must be a number")
-  local ourX = position.x
-  return nibnav.move(ourX < x and POS_X or NEG_X, math.abs(ourX - x), wrapper)
+  return nibnav.move(position.x < x and POS_X or NEG_X, math.abs(position.x - x), wrapper)
 end
 
 function nibnav.moveY(y, wrapper)
@@ -207,27 +201,16 @@ function nibnav.distance(x1, y1, z1, x2, y2, z2)
   return math.sqrt(nibnav.distancesq(x1, y1, z1, x2, y2, z2))
 end
 
--- Travel estimate used by AutoBuild to choose the next nearest block.
--- It is deliberately independent of the optional Navigation component.
 function nibnav.getCost(x, y, z)
   x, y, z = tonumber(x), tonumber(y), tonumber(z)
   assert(x and y and z, "x,y,z must be numbers")
-
   local dx, dy, dz = math.abs(position.x - x), math.abs(position.y - y), math.abs(position.z - z)
   local cost = dx + dy + dz
-
-  -- Small turning penalty makes choices more stable without requiring a map.
   if dx > 0 or dz > 0 then
-    local wanted
-    if dx >= dz then
-      wanted = position.x < x and POS_X or NEG_X
-    else
-      wanted = position.z < z and POS_Z or NEG_Z
-    end
+    local wanted = dx >= dz and (position.x < x and POS_X or NEG_X) or (position.z < z and POS_Z or NEG_Z)
     local turn = nibnav.sideLookup.turn[position.facing]
     if turn and turn[wanted] then cost = cost + math.abs(turn[wanted]) * 0.25 end
   end
-
   return cost
 end
 
