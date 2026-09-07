@@ -1,8 +1,32 @@
 -- AutoBuild.lua
--- Port of BakermanLP's AutoBuild for OpenComputers-MC1.7.10-1.8.10+667626d.
--- Uses the bundled nibnav.lua for tracked movement and facing.
+-- OpenComputers-MC1.7.10-1.8.10+667626d
+-- Uses the bundled /nibnav.lua navigation library.
 
-local nav = require("nibnav")
+local function loadNibnav()
+  -- In OpenOS, require() normally searches library paths. The bundled
+  -- nibnav.lua is kept in the root of this project, so explicitly loading
+  -- /nibnav.lua avoids a "module 'nibnav' not found" error.
+  local ok, nav = pcall(require, "nibnav")
+  if ok and nav then
+    return nav
+  end
+
+  local loader, loadError = loadfile("/nibnav.lua")
+  if not loader then
+    error("nibnav.lua not found. Install /nibnav.lua on the robot. " .. tostring(loadError))
+  end
+
+  local loaded, navOrError = pcall(loader)
+  if not loaded then
+    error("Could not load /nibnav.lua: " .. tostring(navOrError))
+  end
+  if type(navOrError) ~= "table" then
+    error("/nibnav.lua did not return a navigation module")
+  end
+  return navOrError
+end
+
+local nav = loadNibnav()
 local sides = require("sides")
 local robot = require("robot")
 local computer = require("computer")
@@ -15,7 +39,7 @@ nav.setPosition(0, 0, 0, sides.east)
 local function explode(div, str)
   if div == "" then return false end
   local result = {}
-  local pos = 0
+  local pos = 1
   while true do
     local startPos, endPos = string.find(str, div, pos, true)
     if not startPos then break end
@@ -37,8 +61,8 @@ local function refill()
       print("Filling Slot " .. tostring(slot))
       repeat
         local before = robot.space()
-        robot.suckUp(robot.space())
-        if robot.space() == before then
+        local sucked = robot.suckUp(robot.space())
+        if not sucked or robot.space() == before then
           os.sleep(5)
         end
       until robot.space() < 1
@@ -108,16 +132,19 @@ local function readBinvox(file)
     error("Invalid binvox dimensions: " .. tostring(line))
   end
 
-  file:read("*l") -- translate
-  file:read("*l") -- scale
-  file:read("*l") -- data
+  local translate = file:read("*l")
+  local scale = file:read("*l")
+  local data = file:read("*l")
+  if not translate or not scale or data ~= "data" then
+    error("Invalid binvox header: translate/scale/data missing")
+  end
 
   return maxx, maxy, maxz
 end
 
 local file, openError = io.open(MODEL_FILE, "r")
 if not file then
-  error("file not found: " .. MODEL_FILE .. (openError and (" (" .. openError .. ")") or ""))
+  error("Model file not found: " .. MODEL_FILE .. ". Copy your binvox ASCII model to that exact path on the robot. " .. tostring(openError or ""))
 end
 
 local ok, runError = pcall(function()
@@ -127,7 +154,6 @@ local ok, runError = pcall(function()
   for y = 0, maxy - 1 do
     print("Ebene " .. tostring(y))
 
-    -- Binvox ASCII voxel rows are stored as Z rows containing X values.
     for z = 1, maxz do
       local line = file:read("*l")
       if not line then
