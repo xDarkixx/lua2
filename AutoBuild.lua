@@ -1,5 +1,5 @@
 -- AutoBuild.lua - OpenComputers 1.7.10 / 1.8.10
--- Yield-safe version. Any OC-compatible tool in the robot tool slot is accepted.
+-- Watchdog-safe builder. All long loops yield to the OC event loop.
 
 local function loadNibnav()
   local ok, nav = pcall(require, "nibnav")
@@ -19,21 +19,15 @@ local filesystem = require("filesystem")
 
 local START_X, START_Y, START_Z = 0, 1, 0
 local CHARGE_X, CHARGE_Y, CHARGE_Z = 1, 1, 0
-local YIELD_EVERY = 16
 local CHARGE_WAIT_MARGIN = 100
-local workCounter = 0
 
 local function yieldNow()
-  workCounter = workCounter + 1
-  if workCounter >= YIELD_EVERY then
-    workCounter = 0
-    computer.pullSignal(0)
-  end
+  computer.pullSignal(0)
 end
 
 local function status(text)
   print(string.format("[%d/%d/%d] %s", nav.getX(), nav.getY(), nav.getZ(), text))
-  computer.pullSignal(0)
+  yieldNow()
 end
 
 local function energyOK()
@@ -44,11 +38,11 @@ end
 local function moveToY(y)
   while nav.getY() < y do
     local ok, err = nav.up(); if not ok then return false, err end
-    computer.pullSignal(0)
+    yieldNow()
   end
   while nav.getY() > y do
     local ok, err = nav.down(); if not ok then return false, err end
-    computer.pullSignal(0)
+    yieldNow()
   end
   return true
 end
@@ -56,6 +50,7 @@ end
 local function goToPoint(x, y, z)
   local ok, err = nav.moveXZ(x, z)
   if not ok then return false, err end
+  yieldNow()
   return moveToY(y)
 end
 
@@ -64,9 +59,7 @@ local function goToChargePoint()
   status("Energie niedrig - fahre zum Ladepunkt")
   local ok, err = goToPoint(CHARGE_X, CHARGE_Y, CHARGE_Z)
   if not ok then error(err) end
-  while not energyOK() do
-    computer.pullSignal(0)
-  end
+  while not energyOK() do yieldNow() end
   status("Energie ausreichend - kehre zurück")
   ok, err = goToPoint(x, y, z)
   if not ok then error(err) end
@@ -76,8 +69,8 @@ local function ensureEnergy()
   if not energyOK() then goToChargePoint() end
 end
 
--- Do not identify by item ID: Tinkers' Construct tools use generated/NBT data.
--- OpenComputers uses the robot's dedicated tool slot for swing operations.
+-- No item IDs are hard-coded. This keeps vanilla, modded and Tinkers' Construct
+-- tools usable through the OpenComputers robot tool slot.
 local function hasUsableTool()
   local ok, durability = pcall(robot.durability)
   return ok and type(durability) == "number" and durability > 0
@@ -92,7 +85,10 @@ end
 local function readModel(path)
   local f = io.open(path, "r")
   if not f then error("Could not open model: " .. path) end
-  local data = f:read("*a"); f:close()
+  local data = f:read("*a")
+  f:close()
+  yieldNow()
+
   local lines = {}
   for line in data:gmatch("([^\r\n]+)") do
     lines[#lines + 1] = line
@@ -112,7 +108,9 @@ local function readModel(path)
   local voxels, idx = {}, 1
   for i = start, #lines do
     for value in lines[i]:gmatch("[01]") do
-      voxels[idx] = tonumber(value); idx = idx + 1; yieldNow()
+      voxels[idx] = tonumber(value)
+      idx = idx + 1
+      yieldNow()
     end
   end
   return dimX, dimY, dimZ, voxels
@@ -156,8 +154,7 @@ end
 
 local function findBuildingSlot()
   for slot = 2, robot.inventorySize() do
-    local count = robot.count(slot)
-    if count > 1 then return slot end
+    if robot.count(slot) > 1 then return slot end
     yieldNow()
   end
 end
@@ -171,7 +168,7 @@ local function placeBlock()
   robot.select(slot)
   local ok, reason = robot.placeDown()
   if not ok then error("Block konnte nicht platziert werden: " .. tostring(reason)) end
-  computer.pullSignal(0)
+  yieldNow()
 end
 
 local function build(modelPath)
@@ -185,7 +182,7 @@ local function build(modelPath)
       for step = 0, sizeX - 1 do
         local x = reverse and (sizeX - 1 - step) or step
         local index = x + z * sizeX + y * sizeX * sizeZ + 1
-        if voxels[index] == 1 then placeBlock() else yieldNow() end
+        if voxels[index] == 1 then placeBlock() end
         if step < sizeX - 1 then
           local ok, err = nav.forward(); if not ok then error(err) end
         end
@@ -195,12 +192,12 @@ local function build(modelPath)
         if reverse then nav.turnLeft() else nav.turnRight() end
         local ok, err = nav.forward(); if not ok then error(err) end
         if reverse then nav.turnLeft() else nav.turnRight() end
-        computer.pullSignal(0)
+        yieldNow()
       end
     end
     if y < sizeY - 1 then
       local ok, err = nav.up(); if not ok then error(err) end
-      computer.pullSignal(0)
+      yieldNow()
     end
   end
   status("Aufbau abgeschlossen")
@@ -211,5 +208,5 @@ print("Modell: " .. model)
 print("Werkzeug: Vanilla + modded + Tinkers' Construct")
 print("Start: X=" .. START_X .. " Y=" .. START_Y .. " Z=" .. START_Z)
 print("Lade-/Nachfüllpunkt: X=" .. CHARGE_X .. " Y=" .. CHARGE_Y .. " Z=" .. CHARGE_Z)
-computer.pullSignal(0)
+yieldNow()
 build(model)
