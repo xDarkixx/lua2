@@ -1,7 +1,8 @@
 -- AutoBuild.lua - OpenComputers 1.7.10 / 1.8.10
--- Watchdog-safe builder. Long loops yield to the OC event loop.
--- Slot 1 is reserved for the user's optional container/chest item.
--- The refill station accepts ANY inventory container; no chest ID is hard-coded.
+-- Watchdog-safe builder.
+-- Slot 1 contains ANY inventory container chosen by the user.
+-- The container is placed ONLY at the refill point, used there, then removed again.
+-- The START point is NEVER a building position.
 
 local function loadNibnav()
   local ok, nav = pcall(require, "nibnav")
@@ -19,6 +20,8 @@ local robot = require("robot")
 local computer = require("computer")
 local filesystem = require("filesystem")
 
+-- Robot stands one block above the START position.
+-- START itself is permanently excluded from the model.
 local START_X, START_Y, START_Z = 0, 1, 0
 local CHARGE_X, CHARGE_Y, CHARGE_Z = 1, 1, 0
 local CHARGE_WAIT_MARGIN = 100
@@ -58,14 +61,10 @@ end
 
 local function goToChargePoint()
   local x, y, z = nav.getX(), nav.getY(), nav.getZ()
-  status("Energie niedrig - fahre zum Ladepunkt")
+  status("Energie niedrig - fahre zum Nachfüllpunkt")
   local ok, err = goToPoint(CHARGE_X, CHARGE_Y, CHARGE_Z)
   if not ok then error(err) end
-
-  -- The refill point is a MATERIAL station, not an energy charger.
-  -- Never wait forever here for energy to change.
-  status("Ladepunkt erreicht - Energie wird nicht vorausgesetzt")
-
+  status("Nachfüllpunkt erreicht")
   ok, err = goToPoint(x, y, z)
   if not ok then error(err) end
 end
@@ -74,8 +73,6 @@ local function ensureEnergy()
   if not energyOK() then goToChargePoint() end
 end
 
--- No item IDs are hard-coded. Vanilla, modded and Tinkers' tools work
--- through the OpenComputers robot tool slot as long as OC reports durability.
 local function hasUsableTool()
   local ok, durability = pcall(robot.durability)
   return ok and type(durability) == "number" and durability > 0
@@ -152,49 +149,69 @@ local function materialCount()
   return total
 end
 
--- Try every side of the robot. This deliberately does NOT check for a
--- particular chest ID: any OpenComputers-compatible inventory can be used.
 local function suckAnyContainer()
   local before = materialCount()
   local directions = {
-    {"front", function() return robot.suck(64) end},
-    {"up", function() return robot.suckUp(64) end},
-    {"down", function() return robot.suckDown(64) end}
+    function() return robot.suck(64) end,
+    function() return robot.suckUp(64) end,
+    function() return robot.suckDown(64) end
   }
-
-  for _, entry in ipairs(directions) do
-    local ok = pcall(entry[2])
+  for _, fn in ipairs(directions) do
+    pcall(fn)
     yieldNow()
-    if ok and materialCount() > before then return true end
+    if materialCount() > before then return true end
   end
-
-  -- Check the three other horizontal directions without requiring a
-  -- specific container type.
   for _ = 1, 3 do
-    local turned = robot.turnRight()
-    yieldNow()
-    if turned then
-      local ok = pcall(robot.suck, 64)
+    if robot.turnRight() then
+      pcall(robot.suck, 64)
       yieldNow()
-      if ok and materialCount() > before then return true end
+      if materialCount() > before then return true end
     end
   end
   return false
 end
 
+-- Slot 1 is a physical container supplied by the user.
+-- It may be a chest, drawer, barrel or another OC-compatible inventory.
+-- No item ID is checked. The robot places it ONLY at the refill station.
 local function refill()
   local oldX, oldY, oldZ = nav.getX(), nav.getY(), nav.getZ()
-  status("Material leer - fahre zum Lade-/Nachfüllpunkt")
+  status("Material leer - fahre zum Nachfüllpunkt")
   local ok, err = goToPoint(CHARGE_X, CHARGE_Y, CHARGE_Z)
   if not ok then error(err) end
 
-  -- Slot 1 is intentionally ignored for building material. It may contain
-  -- ANY kind of chest/container supplied by the user. The station itself is
-  -- detected by trying the robot inventory API from all sides.
   robot.select(1)
-  local gotMaterial = suckAnyContainer()
+  if robot.count(1) <= 0 then
+    error("Slot 1 ist leer: Lege dort den gewünschten Container ab.")
+  end
+
+  -- Place the user's container at the refill point.
+  local placed, reason = robot.place()
+  if not placed then
+    error("Container aus Slot 1 konnte am Nachfüllpunkt nicht platziert werden: " .. tostring(reason))
+  end
+  yieldNow()
+
+  -- Take building material from that container. It can be any compatible inventory.
+  local gotMaterial = false
+  local before = materialCount()
+  for _ = 1, 8 do
+    local okSuck = pcall(robot.suck, 64)
+    yieldNow()
+    if okSuck and materialCount() > before then gotMaterial = true end
+    if gotMaterial then break end
+  end
+
+  -- Remove the temporary container again and recover it into slot 1.
+  if robot.detect() then
+    robot.swing()
+    yieldNow()
+    pcall(robot.suck, 64)
+    yieldNow()
+  end
+
   if not gotMaterial then
-    error("Kein Material am Nachfüllpunkt gefunden. Stelle irgendeinen Container mit Baumaterial an den Nachfüllpunkt.")
+    error("Kein Baumaterial im Container am Nachfüllpunkt gefunden.")
   end
 
   status("Material nachgefüllt - kehre zurück")
@@ -214,7 +231,7 @@ local function placeBlock()
   local slot = findBuildingSlot()
   if not slot then refill(); slot = findBuildingSlot() end
   if not slot then error("Kein Baumaterial vorhanden.") end
-  if robot.detectDown() then error("Cannot place block: target position is occupied. No block was broken.") end
+  if robot.detectDown() then error("Ziel ist bereits belegt. Es wird NICHT abgebaut.") end
   robot.select(slot)
   local ok, reason = robot.placeDown()
   if not ok then error("Block konnte nicht platziert werden: " .. tostring(reason)) end
@@ -225,6 +242,14 @@ local function build(modelPath)
   requirePickaxe()
   local sizeX, sizeY, sizeZ, voxels = readModel(modelPath)
   nav.setPosition(START_X, START_Y, START_Z, sides.east)
+
+  -- IMPORTANT: leave the START point empty forever.
+  -- Move one block forward before the first possible placement.
+  if sizeX > 0 then
+    local ok, err = nav.forward()
+    if not ok then error(err) end
+    yieldNow()
+  end
 
   for y = 0, sizeY - 1 do
     status(string.format("Ebene %d/%d", y + 1, sizeY))
@@ -251,14 +276,13 @@ local function build(modelPath)
       yieldNow()
     end
   end
-  status("Aufbau abgeschlossen")
+  status("Aufbau abgeschlossen - STARTPUNKT blieb frei")
 end
 
 local model = chooseModel()
 print("Modell: " .. model)
-print("Werkzeug: Vanilla + modded + Tinkers' Construct")
-print("Slot 1: optionaler Container - Typ egal")
-print("Start: X=" .. START_X .. " Y=" .. START_Y .. " Z=" .. START_Z)
-print("Lade-/Nachfüllpunkt: X=" .. CHARGE_X .. " Y=" .. CHARGE_Y .. " Z=" .. CHARGE_Z)
+print("Slot 1: beliebiger Container, nur am Nachfüllpunkt")
+print("START: X=" .. START_X .. " Y=" .. START_Y .. " Z=" .. START_Z .. " bleibt frei")
+print("Nachfüllpunkt: X=" .. CHARGE_X .. " Y=" .. CHARGE_Y .. " Z=" .. CHARGE_Z)
 yieldNow()
 build(model)
