@@ -20,15 +20,11 @@ local robot = require("robot")
 local computer = require("computer")
 local filesystem = require("filesystem")
 
--- Robot stands one block above the START position.
--- START itself is permanently excluded from the model.
 local START_X, START_Y, START_Z = 0, 1, 0
 local CHARGE_X, CHARGE_Y, CHARGE_Z = 1, 1, 0
 local CHARGE_WAIT_MARGIN = 100
 
-local function yieldNow()
-  computer.pullSignal(0)
-end
+local function yieldNow() computer.pullSignal(0) end
 
 local function status(text)
   print(string.format("[%d/%d/%d] %s", nav.getX(), nav.getY(), nav.getZ(), text))
@@ -79,25 +75,16 @@ local function hasUsableTool()
 end
 
 local function requirePickaxe()
-  if not hasUsableTool() then
-    error("Keine verwendbare Spitzhacke/Werkzeug im Roboter-Werkzeugslot.")
-  end
+  if not hasUsableTool() then error("Keine verwendbare Spitzhacke/Werkzeug im Roboter-Werkzeugslot.") end
 end
 
 local function readModel(path)
   local f = io.open(path, "r")
   if not f then error("Could not open model: " .. path) end
-  local data = f:read("*a")
-  f:close()
-  yieldNow()
-
+  local data = f:read("*a"); f:close(); yieldNow()
   local lines = {}
-  for line in data:gmatch("([^\r\n]+)") do
-    lines[#lines + 1] = line
-    yieldNow()
-  end
+  for line in data:gmatch("([^\r\n]+)") do lines[#lines + 1] = line; yieldNow() end
   if #lines == 0 then error("Model file is empty: " .. path) end
-
   local dimX, dimY, dimZ, start = nil, nil, nil, 1
   for i = 1, math.min(#lines, 30) do
     local x, y, z = lines[i]:match("dim%s+(%d+)%s+(%d+)%s+(%d+)")
@@ -106,14 +93,9 @@ local function readModel(path)
     yieldNow()
   end
   if not dimX then error("Invalid binvox model: missing dim line") end
-
   local voxels, idx = {}, 1
   for i = start, #lines do
-    for value in lines[i]:gmatch("[01]") do
-      voxels[idx] = tonumber(value)
-      idx = idx + 1
-      yieldNow()
-    end
+    for value in lines[i]:gmatch("[01]") do voxels[idx] = tonumber(value); idx = idx + 1; yieldNow() end
   end
   return dimX, dimY, dimZ, voxels
 end
@@ -124,8 +106,7 @@ local function findModels()
     if name:sub(-4):lower() == ".txt" then result[#result + 1] = "/home/" .. name end
     yieldNow()
   end
-  table.sort(result)
-  return result
+  table.sort(result); return result
 end
 
 local function chooseModel()
@@ -142,77 +123,47 @@ end
 
 local function materialCount()
   local total = 0
-  for slot = 2, robot.inventorySize() do
-    total = total + robot.count(slot)
-    yieldNow()
-  end
+  for slot = 2, robot.inventorySize() do total = total + robot.count(slot); yieldNow() end
   return total
 end
 
-local function suckAnyContainer()
-  local before = materialCount()
-  local directions = {
-    function() return robot.suck(64) end,
-    function() return robot.suckUp(64) end,
-    function() return robot.suckDown(64) end
-  }
-  for _, fn in ipairs(directions) do
-    pcall(fn)
-    yieldNow()
-    if materialCount() > before then return true end
-  end
-  for _ = 1, 3 do
-    if robot.turnRight() then
-      pcall(robot.suck, 64)
-      yieldNow()
-      if materialCount() > before then return true end
-    end
-  end
-  return false
-end
-
--- Slot 1 is a physical container supplied by the user.
--- It may be a chest, drawer, barrel or another OC-compatible inventory.
--- No item ID is checked. The robot places it ONLY at the refill station.
+-- The container itself is ALWAYS the item in slot 1. No container ID is checked.
+-- The container is temporarily placed in front of the robot at the refill point.
 local function refill()
   local oldX, oldY, oldZ = nav.getX(), nav.getY(), nav.getZ()
   status("Material leer - fahre zum Nachfüllpunkt")
   local ok, err = goToPoint(CHARGE_X, CHARGE_Y, CHARGE_Z)
   if not ok then error(err) end
 
+  if robot.count(1) <= 0 then error("Slot 1 ist leer: Lege dort den gewünschten Container ab.") end
   robot.select(1)
-  if robot.count(1) <= 0 then
-    error("Slot 1 ist leer: Lege dort den gewünschten Container ab.")
-  end
-
-  -- Place the user's container at the refill point.
   local placed, reason = robot.place()
-  if not placed then
-    error("Container aus Slot 1 konnte am Nachfüllpunkt nicht platziert werden: " .. tostring(reason))
-  end
+  if not placed then error("Container aus Slot 1 konnte nicht platziert werden: " .. tostring(reason)) end
   yieldNow()
 
-  -- Take building material from that container. It can be any compatible inventory.
+  -- Slot 2+ receives the building material. Slot 1 stays free for the container.
   local gotMaterial = false
   local before = materialCount()
   for _ = 1, 8 do
-    local okSuck = pcall(robot.suck, 64)
-    yieldNow()
-    if okSuck and materialCount() > before then gotMaterial = true end
-    if gotMaterial then break end
-  end
-
-  -- Remove the temporary container again and recover it into slot 1.
-  if robot.detect() then
-    robot.swing()
-    yieldNow()
+    robot.select(2)
     pcall(robot.suck, 64)
     yieldNow()
+    if materialCount() > before then gotMaterial = true; break end
   end
 
-  if not gotMaterial then
-    error("Kein Baumaterial im Container am Nachfüllpunkt gefunden.")
+  -- Break the temporary container and explicitly recover it into slot 1.
+  if robot.detect() then
+    robot.select(1)
+    robot.swing()
+    yieldNow()
+    if robot.count(1) == 0 then
+      pcall(robot.suck, 64)
+      yieldNow()
+    end
   end
+
+  if robot.count(1) <= 0 then error("Der Container aus Slot 1 konnte nicht zurückgenommen werden.") end
+  if not gotMaterial then error("Kein Baumaterial im Container am Nachfüllpunkt gefunden.") end
 
   status("Material nachgefüllt - kehre zurück")
   ok, err = goToPoint(oldX, oldY, oldZ)
@@ -243,11 +194,9 @@ local function build(modelPath)
   local sizeX, sizeY, sizeZ, voxels = readModel(modelPath)
   nav.setPosition(START_X, START_Y, START_Z, sides.east)
 
-  -- IMPORTANT: leave the START point empty forever.
-  -- Move one block forward before the first possible placement.
+  -- START (0,0,0) is permanently excluded. First build position is x=1.
   if sizeX > 0 then
-    local ok, err = nav.forward()
-    if not ok then error(err) end
+    local ok, err = nav.forward(); if not ok then error(err) end
     yieldNow()
   end
 
@@ -281,7 +230,7 @@ end
 
 local model = chooseModel()
 print("Modell: " .. model)
-print("Slot 1: beliebiger Container, nur am Nachfüllpunkt")
+print("Slot 1: beliebiger Container - nur am Nachfüllpunkt")
 print("START: X=" .. START_X .. " Y=" .. START_Y .. " Z=" .. START_Z .. " bleibt frei")
 print("Nachfüllpunkt: X=" .. CHARGE_X .. " Y=" .. CHARGE_Y .. " Z=" .. CHARGE_Z)
 yieldNow()
