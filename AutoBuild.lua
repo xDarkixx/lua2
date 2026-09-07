@@ -1,20 +1,23 @@
 -- AutoBuild.lua
--- OpenComputers-MC1.7.10-1.8.10+667626d
--- Shows current layer/position and returns to the charging/refill point when low.
--- Slot 1 is reserved for the chest. Slots 2..N are building blocks.
+-- OpenComputers 1.7.10 / 1.8.10 compatible
+-- Slot 1 = chest/refill. Slots 2..N = building material.
+-- The robot's dedicated tool slot is used for mining. No pickaxe item ID is hard-coded:
+-- vanilla and modded pickaxes (including Tinkers' Construct) are handled by robot.swing().
 
 local function loadNibnav()
   local ok, nav = pcall(require, "nibnav")
   if ok and nav then return nav end
+
   local paths = {"/lib/nibnav.lua", "/nibnav.lua"}
   for i = 1, #paths do
-    local loader = loadfile(paths[i])
-    if loader then
-      local loaded, module = pcall(loader)
-      if loaded and type(module) == "table" then return module end
+    local f = io.open(paths[i], "r")
+    if f then
+      f:close()
+      local ok2, loaded = pcall(dofile, paths[i])
+      if ok2 and loaded then return loaded end
     end
   end
-  error("nibnav.lua not found. Install it as /lib/nibnav.lua or /nibnav.lua on the robot.")
+  error("nibnav.lua not found")
 end
 
 local nav = loadNibnav()
@@ -23,268 +26,274 @@ local robot = require("robot")
 local computer = require("computer")
 local filesystem = require("filesystem")
 
--- Build origin and dedicated charging/refill point.
-local START_X, START_Y, START_Z = 0, 0, 0
-local CHARGE_X, CHARGE_Y, CHARGE_Z = 1, 0, 0
+-- The robot starts one block above the first model layer.
+-- This prevents placeDown() from trying to place into the ground/start block.
+local START_X, START_Y, START_Z = 0, 1, 0
+local CHARGE_X, CHARGE_Y, CHARGE_Z = 1, 1, 0
+local CHARGE_WAIT_MARGIN = 100
 
-nav.setPosition(START_X, START_Y, START_Z, sides.east)
-
-local currentLayer = 0
-local maxLayer = 0
-
-local function getPosition()
-  return nav.getPosition()
+local function status(text)
+  local x, y, z = nav.getX(), nav.getY(), nav.getZ()
+  print(string.format("[%d/%d/%d] %s", x, y, z, text))
 end
 
-local function status(message)
-  local x, y, z = getPosition()
-  print(string.format("[AutoBuild] Ebene %d/%d | Position X:%d Y:%d Z:%d | %s",
-    currentLayer + 1, maxLayer, x, y, z, message or ""))
+local function energyOK()
+  local max = computer.maxEnergy()
+  return computer.energy() >= math.min(max - CHARGE_WAIT_MARGIN, max * 0.25)
 end
 
-local function explode(div, str)
-  if div == "" then return false end
-  local result, pos = {}, 1
-  while true do
-    local a, b = string.find(str, div, pos, true)
-    if not a then break end
-    result[#result + 1] = string.sub(str, pos, a - 1)
-    pos = b + 1
+local function goToChargePoint()
+  local x, y, z = nav.getX(), nav.getY(), nav.getZ()
+  status("Energie niedrig - fahre zum Ladepunkt")
+  local ok, err = nav.moveXZ(CHARGE_X, CHARGE_Z)
+  if not ok then error(err) end
+  while nav.getY() < CHARGE_Y do
+    ok, err = nav.up()
+    if not ok then error(err) end
   end
-  result[#result + 1] = string.sub(str, pos)
+  while nav.getY() > CHARGE_Y do
+    ok, err = nav.down()
+    if not ok then error(err) end
+  end
+  while not energyOK() do
+    os.sleep(1)
+  end
+  status("Energie ausreichend - kehre zur Arbeitsposition zurück")
+  ok, err = nav.moveXZ(x, z)
+  if not ok then error(err) end
+  while nav.getY() < y do
+    ok, err = nav.up()
+    if not ok then error(err) end
+  end
+  while nav.getY() > y do
+    ok, err = nav.down()
+    if not ok then error(err) end
+  end
+end
+
+local function ensureEnergy()
+  if not energyOK() then
+    goToChargePoint()
+  end
+end
+
+-- A pickaxe is NOT identified by a fixed item name/id. This is intentional:
+-- Tinkers' Construct tools can have generated tool data/NBT and many materials.
+-- OpenComputers exposes the equipped robot tool through robot.swing(), so any
+-- compatible pickaxe equipped in the robot's tool slot is usable.
+local function hasUsableTool()
+  local ok, value = pcall(robot.durability)
+  if ok and type(value) == "number" then
+    return value > 0
+  end
+  return false
+end
+
+local function requirePickaxe()
+  if not hasUsableTool() then
+    error("Keine verwendbare Spitzhacke im Roboter-Werkzeugslot. Vanilla-, Tinkers'- und Mod-Spitzhacken werden unterstützt, sofern OpenComputers sie als Werkzeug verwenden kann.")
+  end
+end
+
+-- Optional helper for places where mining is explicitly requested.
+-- It only swings when the caller asks for it; navigation itself never mines.
+local function mineForward()
+  ensureEnergy()
+  requirePickaxe()
+  local ok, reason = robot.swing()
+  if not ok then
+    return false, reason or "Block konnte nicht abgebaut werden"
+  end
+  return true
+end
+
+local function readModel(path)
+  local f = io.open(path, "r")
+  if not f then error("Could not open model: " .. path) end
+  local data = f:read("*a")
+  f:close()
+
+  local lines = {}
+  for line in data:gmatch("([^\r\n]+)") do
+    lines[#lines + 1] = line
+  end
+  if #lines == 0 then error("Model file is empty: " .. path) end
+
+  local dimX, dimY, dimZ
+  local start = 1
+  for i = 1, math.min(#lines, 20) do
+    local x, y, z = lines[i]:match("dim%s+(%d+)%s+(%d+)%s+(%d+)")
+    if x then
+      dimX, dimY, dimZ = tonumber(x), tonumber(y), tonumber(z)
+    end
+    if lines[i] == "data" then
+      start = i + 1
+      break
+    end
+  end
+
+  if not dimX then error("Invalid binvox model: missing dim line") end
+
+  local voxels = {}
+  local idx = 1
+  for i = start, #lines do
+    local line = lines[i]
+    for value in line:gmatch("[01]") do
+      voxels[idx] = tonumber(value)
+      idx = idx + 1
+    end
+  end
+
+  return dimX, dimY, dimZ, voxels
+end
+
+local function findModels()
+  local result = {}
+  for name in filesystem.list("/home") do
+    if name:sub(-4):lower() == ".txt" then
+      result[#result + 1] = "/home/" .. name
+    end
+  end
+  table.sort(result)
   return result
 end
 
--- Fills only non-full material slots. No repeated slot messages.
+local function chooseModel()
+  local models = findModels()
+  if #models == 0 then
+    error("No .txt files found in /home. Put a binvox .txt model there.")
+  end
+  if #models == 1 then return models[1] end
+
+  print("Gefundene Modelle:")
+  for i = 1, #models do
+    print(string.format("%d) %s", i, models[i]))
+  end
+  io.write("Nummer wählen: ")
+  local n = tonumber(io.read())
+  if not n or not models[n] then error("Ungültige Auswahl") end
+  return models[n]
+end
+
 local function refill()
-  status("Material wird aufgefüllt")
-  local oldX, oldY, oldZ = getPosition()
+  local oldX, oldY, oldZ = nav.getX(), nav.getY(), nav.getZ()
+  status("Material leer - fahre zum Lade-/Nachfüllpunkt")
 
   local ok, err = nav.moveXZ(CHARGE_X, CHARGE_Z)
-  if not ok then error(err or "Could not reach charging/refill point") end
-  ok, err = nav.moveY(CHARGE_Y)
-  if not ok then error(err or "Could not reach charging/refill height") end
+  if not ok then error(err) end
+  while nav.getY() < CHARGE_Y do
+    ok, err = nav.up()
+    if not ok then error(err) end
+  end
+  while nav.getY() > CHARGE_Y do
+    ok, err = nav.down()
+    if not ok then error(err) end
+  end
 
-  robot.select(1)
-  robot.swingUp()
-  robot.placeUp()
-
+  -- Keep slot 1 reserved for the chest/refill setup.
   for slot = 2, robot.inventorySize() do
     if robot.space(slot) > 0 then
       robot.select(slot)
-      while robot.space() > 0 do
-        local before = robot.count()
-        local sucked = robot.suckUp(robot.space())
-        local after = robot.count()
-        if after == before and not sucked then break end
-        if after >= 64 then break end
-      end
+      robot.suck(64)
     end
   end
 
-  robot.select(1)
-  robot.swingUp()
-  robot.select(2)
-
-  ok, err = nav.moveY(oldY)
-  if not ok then error(err or "Could not restore build height") end
+  status("Material nachgefüllt - kehre zur Arbeitsposition zurück")
   ok, err = nav.moveXZ(oldX, oldZ)
-  if not ok then error(err or "Could not return to build position") end
-  status("Material aufgefüllt")
+  if not ok then error(err) end
+  while nav.getY() < oldY do
+    ok, err = nav.up()
+    if not ok then error(err) end
+  end
+  while nav.getY() > oldY do
+    ok, err = nav.down()
+    if not ok then error(err) end
+  end
 end
 
--- Never break the target block: no unwanted drops in inventory.
+local function findBuildingSlot()
+  for slot = 2, robot.inventorySize() do
+    if robot.count(slot) > 1 then
+      return slot
+    end
+  end
+  return nil
+end
+
 local function placeBlock()
-  local findSlot = 0
-
-  if robot.count() < 2 then
-    for slot = 2, robot.inventorySize() do
-      if robot.count(slot) > 1 then
-        findSlot = slot
-        break
-      end
-    end
-
-    if findSlot < 1 then
-      refill()
-      for slot = 2, robot.inventorySize() do
-        if robot.count(slot) > 1 then
-          findSlot = slot
-          break
-        end
-      end
-    end
-
-    if findSlot < 1 then
-      error("No building blocks available in slots 2.." .. robot.inventorySize())
-    end
-    robot.select(findSlot)
+  ensureEnergy()
+  local slot = findBuildingSlot()
+  if not slot then
+    refill()
+    slot = findBuildingSlot()
+  end
+  if not slot then
+    error("Kein Baumaterial vorhanden.")
   end
 
+  -- Deliberately do NOT break an occupied target. This preserves the
+  -- inventory-safe behavior and prevents unwanted drops/junk.
   if robot.detectDown() then
     error("Cannot place block: target position is occupied. No block was broken.")
   end
 
-  if not robot.placeDown() then
-    error("Could not place building block without breaking the target block.")
+  robot.select(slot)
+  local ok, reason = robot.placeDown()
+  if not ok then
+    error("Block konnte nicht platziert werden: " .. tostring(reason))
   end
 end
 
--- Return to charging point whenever energy is low, recharge, then return
--- to the exact build position where the robot stopped.
-local function refuel()
-  status("Energie niedrig - gehe zum Charging Point")
-  local oldX, oldY, oldZ = getPosition()
+local function build(modelPath)
+  local sizeX, sizeY, sizeZ, voxels = readModel(modelPath)
+  nav.setPosition(START_X, START_Y, START_Z, sides.east)
 
-  local ok, err = nav.moveXZ(CHARGE_X, CHARGE_Z)
-  if not ok then error(err or "Could not reach charging point") end
-  ok, err = nav.moveY(CHARGE_Y)
-  if not ok then error(err or "Could not reach charging height") end
+  for y = 0, sizeY - 1 do
+    status(string.format("Ebene %d/%d", y + 1, sizeY))
 
-  status("Lade Energie auf")
-  while computer.maxEnergy() - computer.energy() > 100 do
-    os.sleep(1)
-  end
+    -- Robot stands one block above the layer it builds.
+    for z = 0, sizeZ - 1 do
+      local reverse = (z % 2 == 1)
+      for step = 0, sizeX - 1 do
+        local x = reverse and (sizeX - 1 - step) or step
+        local index = x + z * sizeX + y * sizeX * sizeZ + 1
+        if voxels[index] == 1 then
+          placeBlock()
+        end
 
-  ok, err = nav.moveY(oldY)
-  if not ok then error(err or "Could not restore build height") end
-  ok, err = nav.moveXZ(oldX, oldZ)
-  if not ok then error(err or "Could not return to build position") end
-  status("Zurück am Baupunkt")
-end
-
-local function readBinvox(file)
-  local line = file:read("*l")
-  if not line then error("Empty model file") end
-  line = file:read("*l")
-  if not line then error("Missing binvox dim line") end
-  local sx, sy, sz = line:match("dim%s+(%d+)%s+(%d+)%s+(%d+)")
-  local maxx, maxy, maxz = tonumber(sx), tonumber(sy), tonumber(sz)
-  if not maxx or not maxy or not maxz then
-    error("Invalid binvox dimensions: " .. tostring(line))
-  end
-  local translate = file:read("*l")
-  local scale = file:read("*l")
-  local data = file:read("*l")
-  if not translate or not scale or data ~= "data" then
-    error("Invalid binvox header: translate/scale/data missing")
-  end
-  return maxx, maxy, maxz
-end
-
-local function findTextFiles()
-  local files = {}
-  local ok, iterator = pcall(filesystem.list, "/home")
-  if not ok or not iterator then
-    error("Cannot read /home. OpenOS filesystem library is unavailable.")
-  end
-  for name in iterator do
-    if type(name) == "string" then
-      name = name:gsub("/$", "")
-      if name:lower():sub(-4) == ".txt" then
-        files[#files + 1] = "/home/" .. name
-      end
-    end
-  end
-  table.sort(files)
-  return files
-end
-
-local function openModel()
-  local files = findTextFiles()
-  if #files == 0 then
-    error("No .txt files found in /home. Copy a binvox ASCII TXT model into /home.")
-  end
-
-  print("")
-  print("=== AutoBuild: TXT-Dateien in /home ===")
-  for i = 1, #files do
-    print(string.format("[%d] %s", i, files[i]))
-  end
-
-  local selected = 1
-  if #files > 1 then
-    print("")
-    print("Welche Datei soll gebaut werden? Nummer eingeben (1-" .. #files .. "):")
-    local answer = io.read()
-    local number = tonumber(answer or "")
-    if number and number >= 1 and number <= #files then
-      selected = math.floor(number)
-    else
-      print("Ungültige Auswahl - verwende: " .. files[1])
-    end
-  end
-
-  local path = files[selected]
-  local file, err = io.open(path, "r")
-  if not file then error("Could not open model " .. path .. ": " .. tostring(err or "")) end
-  print("Model ausgewählt: " .. path)
-  return file
-end
-
-local file = openModel()
-local ok, runError = pcall(function()
-  local maxx, maxy, maxz = readBinvox(file)
-  maxLayer = maxy
-  local layer = {}
-
-  status("Start - Charging Point bei X:1 Y:0 Z:0")
-
-  for y = 0, maxy - 1 do
-    currentLayer = y
-    status("Starte Ebene")
-    for z = 1, maxz do
-      local line = file:read("*l")
-      if not line then error("Unexpected end of model at y=" .. y .. ", z=" .. z) end
-      layer[z] = explode(" ", line)
-    end
-
-    local findings = 1
-    while findings > 0 do
-      local minway = maxx * 3 * 15 + 10
-      local nextX, nextZ
-      findings = 0
-      for x = 1, maxx do
-        for z = 1, maxz do
-          if layer[z] and layer[z][x] == "1" then
-            findings = findings + 1
-            local travelCost = nav.getCost(x, y, z)
-            if travelCost < minway then
-              minway, nextX, nextZ = travelCost, x, z
-            end
-          end
+        if step < sizeX - 1 then
+          local ok, err = nav.forward()
+          if not ok then error(err) end
         end
       end
 
-      if nextX and nextZ then
-        status("Gehe zu Block X:" .. nextX .. " Z:" .. nextZ)
-        local moveOK, moveError = nav.moveXZ(nextX, nextZ)
-        if not moveOK then error(moveError or "Unable to reach next block") end
-        placeBlock()
-        layer[nextZ][nextX] = "0"
-        findings = findings - 1
-
-        if computer.energy() < nav.getCost(CHARGE_X, CHARGE_Y, CHARGE_Z) + maxx * 3 * 15 + 10 then
-          refuel()
+      if z < sizeZ - 1 then
+        if reverse then
+          nav.turnLeft()
+          local ok, err = nav.forward()
+          if not ok then error(err) end
+          nav.turnLeft()
+        else
+          nav.turnRight()
+          local ok, err = nav.forward()
+          if not ok then error(err) end
+          nav.turnRight()
         end
-        os.sleep(0.1)
       end
     end
 
-    if y < maxy - 1 then
-      local upOK, upError = nav.up()
-      if not upOK then error(upError or "Unable to move to next layer") end
+    if y < sizeY - 1 then
+      local ok, err = nav.up()
+      if not ok then error(err) end
     end
   end
 
-  status("Bau fertig - Rückkehr zum Start")
-  local moveOK, moveError = nav.moveXZ(START_X, START_Z)
-  if not moveOK then error(moveError or "Unable to return home") end
-  moveOK, moveError = nav.moveY(START_Y)
-  if not moveOK then error(moveError or "Unable to return to base height") end
-  nav.faceSide(sides.east)
-end)
+  status("Aufbau abgeschlossen")
+end
 
-if file then file:close() end
-if not ok then error(runError, 0) end
-print("AutoBuild finished successfully.")
+local model = chooseModel()
+print("Modell: " .. model)
+print("Werkzeug: Jede von OpenComputers unterstützte Spitzhacke kann verwendet werden, einschließlich Tinkers' Construct.")
+print("Startposition des Roboters: X=" .. START_X .. " Y=" .. START_Y .. " Z=" .. START_Z)
+print("Lade-/Nachfüllpunkt: X=" .. CHARGE_X .. " Y=" .. CHARGE_Y .. " Z=" .. CHARGE_Z)
+build(model)
