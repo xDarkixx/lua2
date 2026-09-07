@@ -59,7 +59,6 @@ local function protected(fn, ...)
 end
 
 function nibnav.getFacing() return position.facing end
-
 function nibnav.getFacingFromSide(side)
   if side == sides.up or side == sides.down then return side end
   local lookup = nibnav.sideLookup.translation[position.facing]
@@ -68,23 +67,24 @@ function nibnav.getFacingFromSide(side)
 end
 
 function nibnav.getPosition() return position.x, position.y, position.z end
+-- Compatibility getters for older AutoBuild versions.
+function nibnav.getX() return position.x end
+function nibnav.getY() return position.y end
+function nibnav.getZ() return position.z end
 
 function nibnav.turnLeft()
   local newFacing = nibnav.sideLookup.translation[position.facing][sides.left]
   return action(robot.turnLeft, function() position.facing = newFacing end)
 end
-
 function nibnav.turnRight()
   local newFacing = nibnav.sideLookup.translation[position.facing][sides.right]
   return action(robot.turnRight, function() position.facing = newFacing end)
 end
-
 function nibnav.turnAround()
   local ok, err = nibnav.turnRight()
   if not ok then return nil, err end
   return nibnav.turnRight()
 end
-
 function nibnav.faceSide(side)
   if position.facing == side then return true end
   local turns = nibnav.sideLookup.turn[position.facing]
@@ -95,8 +95,6 @@ function nibnav.faceSide(side)
   return nibnav.turnLeft()
 end
 
--- Important: do NOT swing/break blocks while moving.
--- This prevents cobblestone, dirt, plants, etc. from entering the inventory.
 function nibnav.forward()
   if robot.detect() then
     return nil, "Path blocked: front block was not broken (inventory-safe mode)"
@@ -108,7 +106,6 @@ function nibnav.forward()
     elseif position.facing == NEG_Z then position.z = position.z - 1 end
   end)
 end
-
 function nibnav.back()
   return action(robot.back, function()
     if position.facing == POS_X then position.x = position.x - 1
@@ -117,14 +114,12 @@ function nibnav.back()
     elseif position.facing == NEG_Z then position.z = position.z + 1 end
   end)
 end
-
 function nibnav.up()
   if robot.detectUp() then
     return nil, "Path blocked: block above was not broken (inventory-safe mode)"
   end
   return action(robot.up, function() position.y = position.y + 1 end)
 end
-
 function nibnav.down()
   if robot.detectDown() then
     return nil, "Path blocked: block below was not broken (inventory-safe mode)"
@@ -140,10 +135,8 @@ function nibnav.move(direction, distance, wrapper)
   assert(type(wrapper) == "function", "wrapper must be a function")
   return protected(function()
     local moveFn
-    if direction == sides.up then
-      moveFn = nibnav.up
-    elseif direction == sides.down then
-      moveFn = nibnav.down
+    if direction == sides.up then moveFn = nibnav.up
+    elseif direction == sides.down then moveFn = nibnav.down
     else
       assert(nibnav.sideLookup.turn[direction], "invalid direction")
       local ok, err = nibnav.faceSide(direction)
@@ -154,22 +147,18 @@ function nibnav.move(direction, distance, wrapper)
     if not ok then error(err or "movement failed", 0) end
   end)
 end
-
 function nibnav.moveX(x, wrapper)
   x = tonumber(x); assert(x, "x must be a number")
   return nibnav.move(position.x < x and POS_X or NEG_X, math.abs(position.x - x), wrapper)
 end
-
 function nibnav.moveY(y, wrapper)
   y = tonumber(y); assert(y, "y must be a number")
   return nibnav.move(position.y < y and sides.up or sides.down, math.abs(position.y - y), wrapper)
 end
-
 function nibnav.moveZ(z, wrapper)
   z = tonumber(z); assert(z, "z must be a number")
   return nibnav.move(position.z < z and POS_Z or NEG_Z, math.abs(position.z - z), wrapper)
 end
-
 function nibnav.moveXZ(x, z, wrapper)
   x, z = tonumber(x), tonumber(z)
   assert(x and z, "x and z must be numbers")
@@ -184,23 +173,19 @@ function nibnav.moveXZ(x, z, wrapper)
     end
   end)
 end
-
 function nibnav.setPosition(x, y, z, facing)
   x, y, z, facing = tonumber(x), tonumber(y), tonumber(z), tonumber(facing)
   assert(x and y and z, "Invalid x,y,z")
   assert(nibnav.sideLookup.turn[facing], "Invalid facing")
   position.x, position.y, position.z, position.facing = x, y, z, facing
 end
-
 function nibnav.distancesq(x1, y1, z1, x2, y2, z2)
   local dx, dy, dz = x2 - x1, y2 - y1, z2 - z1
   return dx * dx + dy * dy + dz * dz
 end
-
 function nibnav.distance(x1, y1, z1, x2, y2, z2)
   return math.sqrt(nibnav.distancesq(x1, y1, z1, x2, y2, z2))
 end
-
 function nibnav.getCost(x, y, z)
   x, y, z = tonumber(x), tonumber(y), tonumber(z)
   assert(x and y and z, "x,y,z must be numbers")
