@@ -23,8 +23,7 @@ local robot = require("robot")
 local computer = require("computer")
 local filesystem = require("filesystem")
 
--- The build origin is (0,0,0). The refill/charging point is kept one block
--- in front of it so the robot can leave the build area free.
+-- Build origin and dedicated charging/refill point.
 local START_X, START_Y, START_Z = 0, 0, 0
 local CHARGE_X, CHARGE_Y, CHARGE_Z = 1, 0, 0
 
@@ -33,9 +32,14 @@ nav.setPosition(START_X, START_Y, START_Z, sides.east)
 local currentLayer = 0
 local maxLayer = 0
 
+local function getPosition()
+  return nav.getPosition()
+end
+
 local function status(message)
+  local x, y, z = getPosition()
   print(string.format("[AutoBuild] Ebene %d/%d | Position X:%d Y:%d Z:%d | %s",
-    currentLayer + 1, maxLayer, nav.getX(), nav.getY(), nav.getZ(), message or ""))
+    currentLayer + 1, maxLayer, x, y, z, message or ""))
 end
 
 local function explode(div, str)
@@ -51,12 +55,11 @@ local function explode(div, str)
   return result
 end
 
--- Fills only non-full material slots. No repeated "slot full" messages.
+-- Fills only non-full material slots. No repeated slot messages.
 local function refill()
   status("Material wird aufgefüllt")
-  local oldX, oldY, oldZ = nav.getX(), nav.getY(), nav.getZ()
+  local oldX, oldY, oldZ = getPosition()
 
-  -- Go to the dedicated refill/charging point first.
   local ok, err = nav.moveXZ(CHARGE_X, CHARGE_Z)
   if not ok then error(err or "Could not reach charging/refill point") end
   ok, err = nav.moveY(CHARGE_Y)
@@ -83,7 +86,6 @@ local function refill()
   robot.swingUp()
   robot.select(2)
 
-  -- Return to the exact position where the robot left the build.
   ok, err = nav.moveY(oldY)
   if not ok then error(err or "Could not restore build height") end
   ok, err = nav.moveXZ(oldX, oldZ)
@@ -91,8 +93,7 @@ local function refill()
   status("Material aufgefüllt")
 end
 
--- Never break the block below the robot. This prevents drops from entering
--- the inventory and keeps the inventory clean.
+-- Never break the target block: no unwanted drops in inventory.
 local function placeBlock()
   local findSlot = 0
 
@@ -129,11 +130,11 @@ local function placeBlock()
   end
 end
 
--- Return to the dedicated charging point whenever energy is low, recharge,
--- then return to the exact build position.
-local function refuel(lastY)
+-- Return to charging point whenever energy is low, recharge, then return
+-- to the exact build position where the robot stopped.
+local function refuel()
   status("Energie niedrig - gehe zum Charging Point")
-  local oldX, oldY, oldZ = nav.getX(), nav.getY(), nav.getZ()
+  local oldX, oldY, oldZ = getPosition()
 
   local ok, err = nav.moveXZ(CHARGE_X, CHARGE_Z)
   if not ok then error(err or "Could not reach charging point") end
@@ -264,7 +265,7 @@ local ok, runError = pcall(function()
         findings = findings - 1
 
         if computer.energy() < nav.getCost(CHARGE_X, CHARGE_Y, CHARGE_Z) + maxx * 3 * 15 + 10 then
-          refuel(y)
+          refuel()
         end
         os.sleep(0.1)
       end
