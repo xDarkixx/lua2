@@ -1,29 +1,25 @@
 -- AutoBuild.lua
 -- OpenComputers-MC1.7.10-1.8.10+667626d
--- Uses the bundled /nibnav.lua navigation library.
+-- Uses the bundled nibnav.lua navigation library.
 
 local function loadNibnav()
-  -- In OpenOS, require() normally searches library paths. The bundled
-  -- nibnav.lua is kept in the root of this project, so explicitly loading
-  -- /nibnav.lua avoids a "module 'nibnav' not found" error.
   local ok, nav = pcall(require, "nibnav")
   if ok and nav then
     return nav
   end
 
-  local loader, loadError = loadfile("/nibnav.lua")
-  if not loader then
-    error("nibnav.lua not found. Install /nibnav.lua on the robot. " .. tostring(loadError))
+  local paths = {"/lib/nibnav.lua", "/nibnav.lua"}
+  for i = 1, #paths do
+    local loader, loadError = loadfile(paths[i])
+    if loader then
+      local loaded, navOrError = pcall(loader)
+      if loaded and type(navOrError) == "table" then
+        return navOrError
+      end
+    end
   end
 
-  local loaded, navOrError = pcall(loader)
-  if not loaded then
-    error("Could not load /nibnav.lua: " .. tostring(navOrError))
-  end
-  if type(navOrError) ~= "table" then
-    error("/nibnav.lua did not return a navigation module")
-  end
-  return navOrError
+  error("nibnav.lua not found. Install it as /lib/nibnav.lua or /nibnav.lua on the robot.")
 end
 
 local nav = loadNibnav()
@@ -31,9 +27,14 @@ local sides = require("sides")
 local robot = require("robot")
 local computer = require("computer")
 
-local MODEL_FILE = "/industrialbuilding.txt"
+-- OpenComputers/OpenOS normally uses /home for user files.
+-- Try common locations so the model does not have to be moved to /.
+local MODEL_FILES = {
+  "/home/industrialbuilding.txt",
+  "/industrialbuilding.txt",
+  "industrialbuilding.txt"
+}
 
--- The original AutoBuild coordinate system starts at 0,0,0 facing east.
 nav.setPosition(0, 0, 0, sides.east)
 
 local function explode(div, str)
@@ -122,7 +123,6 @@ local function readBinvox(file)
   local line = file:read("*l")
   if not line then error("Empty model file") end
 
-  -- #binvox ASCII data
   line = file:read("*l")
   if not line then error("Missing binvox dim line") end
 
@@ -142,11 +142,22 @@ local function readBinvox(file)
   return maxx, maxy, maxz
 end
 
-local file, openError = io.open(MODEL_FILE, "r")
-if not file then
-  error("Model file not found: " .. MODEL_FILE .. ". Copy your binvox ASCII model to that exact path on the robot. " .. tostring(openError or ""))
+local function openModel()
+  local errors = {}
+  for i = 1, #MODEL_FILES do
+    local path = MODEL_FILES[i]
+    local file, err = io.open(path, "r")
+    if file then
+      print("Model: " .. path)
+      return file, path
+    end
+    errors[#errors + 1] = path .. " (" .. tostring(err or "not found") .. ")"
+  end
+
+  error("industrialbuilding.txt not found. Tried:\n  " .. table.concat(errors, "\n  "))
 end
 
+local file = openModel()
 local ok, runError = pcall(function()
   local maxx, maxy, maxz = readBinvox(file)
   local layer = {}
