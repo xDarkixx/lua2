@@ -62,7 +62,7 @@ class FormatRoundTripTests(unittest.TestCase):
         palette = [_state_name(x) for x in _list(_v(region, 'BlockStatePalette', {}))]
         bits = max(2, (len(palette) - 1).bit_length())
         raw = _longs(_v(region, 'BlockStates', []))
-        print('LITEMATIC DEBUG palette=', palette, 'longs=', raw, 'indices=', _bits(raw, bits, 12))
+        self.assertEqual(len(_bits(raw, bits, 12)), 12)
         self.check_modern_states(load_any(p))
 
     def test_obj_and_mtl(self):
