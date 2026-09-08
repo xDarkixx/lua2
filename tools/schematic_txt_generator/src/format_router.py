@@ -59,31 +59,25 @@ def _schem_root(s):
         state=getattr(s,'states',{}).get(i,LEGACY_TO_STATE.get(s.block_id(i),'minecraft:stone' if s.block_id(i) else 'minecraft:air'))
         if state not in palette: palette[state]=len(palette)
         ids.append(palette[state])
-    root={'Version':(3,2),'DataVersion':(3,1976),'Width':(2,s.width),'Height':(2,s.height),'Length':(2,s.length),'Palette':(10,{k:(3,v) for k,v in palette.items()}),'BlockData':(7,_put_varints(ids)),'Metadata':(10,{'Name':(8,s.name),'WEOffsetX':(3,0),'WEOffsetY':(3,0),'WEOffsetZ':(3,0)}),'BlockEntities':(9,{'type':10,'items':[]})}
-    return root
+    return {'Version':(3,2),'DataVersion':(3,1976),'Width':(2,s.width),'Height':(2,s.height),'Length':(2,s.length),'Palette':(10,{k:(3,v) for k,v in palette.items()}),'BlockData':(7,_put_varints(ids)),'Metadata':(10,{'Name':(8,s.name),'WEOffsetX':(3,0),'WEOffsetY':(3,0),'WEOffsetZ':(3,0)}),'BlockEntities':(9,{'type':10,'items':[]})}
 def save_schem(path,s): write(path,'Schematic',_schem_root(s))
 
 def _longs(data):
-    if isinstance(data,(list,tuple)):
-        return [int(x)&((1<<64)-1) for x in data]
+    if isinstance(data,(list,tuple)): return [int(x)&((1<<64)-1) for x in data]
     if len(data)%8: raise ValueError('Litematic: BlockStates-Länge ist ungültig.')
     return [struct.unpack('>Q',bytes(data[i:i+8]))[0] for i in range(0,len(data),8)]
 def _bits(values,bits,count):
-    mask=(1<<bits)-1;out=[]
+    # Litematica stores a fixed number of complete entries per 64-bit long.
+    per_long=max(1,64//bits);mask=(1<<bits)-1;out=[]
     for i in range(count):
-        bit=i*bits;q,off=bit>>6,bit&63
+        q,slot=divmod(i,per_long)
         if q>=len(values): raise ValueError('Litematic: BlockStates ist zu kurz.')
-        v=values[q]>>off
-        if off+bits>64:
-            if q+1>=len(values): raise ValueError('Litematic: BlockStates ist abgeschnitten.')
-            v|=values[q+1]<<(64-off)
-        out.append(v&mask)
+        out.append((values[q]>>(slot*bits))&mask)
     return out
 def _pack_bits(indices,bits):
-    n=(len(indices)*bits+63)//64;vals=[0]*n;mask=(1<<bits)-1
+    per_long=max(1,64//bits);n=(len(indices)+per_long-1)//per_long;vals=[0]*n;mask=(1<<bits)-1
     for i,idx in enumerate(indices):
-        bit=i*bits;q,off=bit>>6,bit&63;v=idx&mask;vals[q]|=v<<off
-        if off+bits>64: vals[q+1]|=v>>(64-off)
+        q,slot=divmod(i,per_long);vals[q]|=(int(idx)&mask)<<(slot*bits)
     return [v if v<(1<<63) else v-(1<<64) for v in vals]
 
 def load_litematic(path):
@@ -152,10 +146,8 @@ def load_obj(path):
         m=re.fullmatch(r'block_(\d+)_(\d+)_x(-?\d+)_y(-?\d+)_z(-?\d+)',n)
         if m:parsed.append(tuple(map(int,m.groups())))
     if not parsed:raise ValueError('OBJ enthält keine SchematicTxtGenerator-Blockobjekte (block_ID_META_xX_yY_zZ).')
-    if dimensions and len(dimensions)==3 and all(v>0 for v in dimensions):
-        w,h,l=dimensions
-    else:
-        w=max(x for _,_,x,_,_ in parsed)+1;h=max(y for _,_,_,y,_ in parsed)+1;l=max(z for _,_,_,_,z in parsed)+1
+    if dimensions and len(dimensions)==3 and all(v>0 for v in dimensions):w,h,l=dimensions
+    else:w=max(x for _,_,x,_,_ in parsed)+1;h=max(y for _,_,_,y,_ in parsed)+1;l=max(z for _,_,_,_,z in parsed)+1
     low=bytearray(w*h*l);data=bytearray(w*h*l)
     for bid,md,x,y,z in parsed:
         if x<0 or y<0 or z<0 or x>=w or y>=h or z>=l:continue
