@@ -1,0 +1,13 @@
+SCHEMATIC_TXT 1
+name=Example_1.7.10
+size=5,3,5
+materials=Alpha
+
+# x,y,z=block_id:metadata
+0,0,0=1:0
+1,0,0=1:0
+2,0,0=1:0
+3,0,0=1:0
+4,0,0=1:0
+2,1,2=20:0
+2,2,2=20:0
