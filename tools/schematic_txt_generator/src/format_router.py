@@ -51,7 +51,7 @@ def load_schem(path):
     low=bytearray(total);meta=bytearray(total);states={}
     for i,idx in enumerate(vals):
         state=_state_name(names.get(idx,'minecraft:air'));states[i]=state;low[i]=_legacy_id(state)&255
-    s=Schematic(str(_v(r,'Name',Path(path).stem)),w,h,l,'Alpha',bytes(low),bytes(meta));s.states=states;return s
+    s=Schematic(str(_v(r,'Name',Path(path).stem)),w,h,l,'Universal',bytes(low),bytes(meta));s.states=states;return s
 
 def _schem_root(s):
     total=s.width*s.height*s.length;palette={};ids=[]
@@ -101,10 +101,10 @@ def load_litematic(path):
             if sy<0:y=ay-1-y
             if sz<0:z=az-1-z
             allblocks[(px+x,py+y,pz+z)]=palette[idx]
-    if not allblocks:return Schematic(name,1,1,1,'Alpha',b'\0',b'\0')
+    if not allblocks:return Schematic(name,1,1,1,'Universal',b'\0',b'\0')
     minx=min(x for x,y,z in allblocks);miny=min(y for x,y,z in allblocks);minz=min(z for x,y,z in allblocks);maxx=max(x for x,y,z in allblocks);maxy=max(y for x,y,z in allblocks);maxz=max(z for x,y,z in allblocks);w,h,l=maxx-minx+1,maxy-miny+1,maxz-minz+1;low=bytearray(w*h*l);meta=bytearray(w*h*l);states={}
     for (x,y,z),state in allblocks.items():i=(x-minx)+(z-minz)*w+(y-miny)*w*l;states[i]=state;low[i]=_legacy_id(state)&255
-    s=Schematic(name,w,h,l,'Alpha',bytes(low),bytes(meta));s.states=states;return s
+    s=Schematic(name,w,h,l,'Universal',bytes(low),bytes(meta));s.states=states;return s
 
 def save_litematic(path,s):
     total=s.width*s.height*s.length;states=getattr(s,'states',{});palette=[];pindex={};indices=[]
@@ -153,7 +153,7 @@ def load_obj(path):
     for bid,md,x,y,z in parsed:
         if x<0 or y<0 or z<0:continue
         i=x+z*w+y*w*l;low[i]=bid&255;data[i]=md&15
-    return Schematic(path.stem,w,h,l,'Alpha',bytes(low),bytes(data))
+    return Schematic(path.stem,w,h,l,'Universal',bytes(low),bytes(data))
 
 def load_any(path):
     p=Path(path);e=p.suffix.lower()
