@@ -1,6 +1,6 @@
 from .nbt import *
 class Schematic:
- def __init__(self,name,w,h,l,materials,blocks,data,add=None):self.name=name;self.width=w;self.height=h;self.length=l;self.materials=materials or 'Alpha';self.blocks=blocks;self.data=data;self.addblocks=add
+ def __init__(self,name,w,h,l,materials,blocks,data,add=None):self.name=name;self.width=w;self.height=h;self.length=l;self.materials=materials or 'Universal';self.blocks=blocks;self.data=data;self.addblocks=add
  def block_id(self,i):
   low=self.blocks[i]&255
   if self.addblocks and i//2<len(self.addblocks):
@@ -13,7 +13,7 @@ def load_schematic(path):
  if min(w,h,l)<=0:raise NBTError('Ungültige Abmessungen.')
  blocks=bytes(v('Blocks',b''));data=bytes(v('Data',b''));add=v('AddBlocks',None);add=bytes(add) if add is not None else None
  if len(blocks)!=total or len(data)!=total:raise NBTError('Blocks/Data passen nicht zur Größe.')
- return Schematic(str(v('Name',rootname or 'Schematic')),w,h,l,str(v('Materials','Alpha')),blocks,data,add)
+ return Schematic(str(v('Name',rootname or 'Schematic')),w,h,l,str(v('Materials','Universal')),blocks,data,add)
 def save_schematic(path,s):
  total=s.width*s.height*s.length
  root={'Width':(2,s.width),'Height':(2,s.height),'Length':(2,s.length),'Materials':(8,s.materials),'Blocks':(7,s.blocks),'Data':(7,s.data),'Entities':(9,{'type':10,'items':[]}),'TileEntities':(9,{'type':10,'items':[]}),'Name':(8,s.name)}
