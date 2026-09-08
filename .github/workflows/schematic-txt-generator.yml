@@ -1,0 +1,45 @@
+name: SchematicTxtGenerator EXE
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'tools/schematic_txt_generator/**'
+      - '.github/workflows/schematic-txt-generator.yml'
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tools/schematic_txt_generator
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Abhängigkeiten installieren
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Tests + EXE bauen
+        run: python build_all.py
+
+      - name: Fertige Einzeldatei als Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: SchematicTxtGenerator-Windows
+          path: tools/schematic_txt_generator/dist/SchematicTxtGenerator.exe
+          if-no-files-found: error
+
+      - name: EXE an GitHub Release anhängen
+        if: github.event_name == 'release' && github.event.action == 'published'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tools/schematic_txt_generator/dist/SchematicTxtGenerator.exe
