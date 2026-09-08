@@ -5,19 +5,21 @@ from tkinter import ttk,filedialog,messagebox
 from src.schematic import load_schematic,save_schematic
 from src.txtformat import export_txt,import_txt
 from src.build_tool import main as build_main
+from src.viewer3d import Viewer3D
 class App(tk.Tk):
  def __init__(self):
-  super().__init__();self.title('SchematicTxtGenerator');self.geometry('1050x700');self.minsize(850,560);self.ui()
+  super().__init__();self.title('SchematicTxtGenerator');self.geometry('1050x700');self.minsize(850,560);self.current=None;self.ui()
  def ui(self):
   top=ttk.Frame(self,padding=18);top.pack(fill='x');ttk.Label(top,text='SchematicTxtGenerator',font=('Segoe UI',20,'bold')).pack(anchor='w');ttk.Label(top,text='Minecraft 1.7.10 • Schematica • klassisches .schematic').pack(anchor='w',pady=(3,12))
   b=ttk.Frame(top);b.pack(fill='x')
-  ttk.Button(b,text='Schematic → TXT',command=self.s2t).pack(side='left',padx=(0,7));ttk.Button(b,text='TXT → Schematic',command=self.t2s).pack(side='left',padx=7);ttk.Button(b,text='EXE kompilieren',command=self.build).pack(side='left',padx=7);ttk.Button(b,text='Build-Ordner',command=self.open_dist).pack(side='left',padx=7)
+  for text,cmd in [('Schematic → TXT',self.s2t),('TXT → Schematic',self.t2s),('3D Vorschau',self.show3d),('EXE kompilieren',self.build),('Build-Ordner',self.open_dist)]:ttk.Button(b,text=text,command=cmd).pack(side='left',padx=5)
   mid=ttk.Frame(self,padding=(18,0,18,8));mid.pack(fill='both',expand=True);self.tree=ttk.Treeview(mid,columns=('x','y','z','id','meta'),show='headings')
   for c,t,w in [('x','X',90),('y','Y',90),('z','Z',90),('id','Block-ID',130),('meta','Metadata',110)]:self.tree.heading(c,text=t);self.tree.column(c,width=w,anchor='center')
   sb=ttk.Scrollbar(mid,command=self.tree.yview);self.tree.configure(yscrollcommand=sb.set);self.tree.pack(side='left',fill='both',expand=True);sb.pack(side='right',fill='y')
   bot=ttk.Frame(self,padding=18);bot.pack(fill='x');self.status=ttk.Label(bot,text='Bereit.');self.status.pack(anchor='w');self.log=tk.Text(bot,height=8,font=('Consolas',9));self.log.pack(fill='x',pady=(5,0));self.log.insert('end','Bereit.\n')
  def add(self,s):self.after(0,lambda:(self.log.insert('end',s+'\n'),self.log.see('end')))
  def preview(self,s):
+  self.current=s
   for x in self.tree.get_children():self.tree.delete(x)
   n=0
   for y in range(s.height):
@@ -28,6 +30,13 @@ class App(tk.Tk):
       if n<50000:self.tree.insert('', 'end',values=(x,y,z,b,s.meta(i)))
       n+=1
   return n
+ def show3d(self):
+  if self.current is None:
+   a=filedialog.askopenfilename(filetypes=[('Schematic','*.schematic'),('TXT','*.txt')])
+   if not a:return
+   try:self.current=load_schematic(a) if a.lower().endswith('.schematic') else import_txt(a);self.preview(self.current)
+   except Exception as e:self.err(e);return
+  Viewer3D(self,self.current)
  def s2t(self):
   a=filedialog.askopenfilename(filetypes=[('Schematic','*.schematic')]);
   if not a:return
