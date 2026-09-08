@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from src.schematic import Schematic
-from src.format_router import load_any, save_any
+from src.format_router import load_any, save_any, _nbt, _v, _list, _state_name, _longs, _bits
 
 
 class FormatRoundTripTests(unittest.TestCase):
@@ -16,7 +16,7 @@ class FormatRoundTripTests(unittest.TestCase):
         blocks[1] = 20
         blocks[2] = 49
         blocks[3] = 57
-        blocks[4] = 255  # legacy-only ID; preserved by .schematic/.txt
+        blocks[4] = 255
         data[4] = 3
         s = Schematic('roundtrip', w, h, l, 'Alpha', bytes(blocks), bytes(data))
         s.addblocks = bytes([0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0])
@@ -57,6 +57,12 @@ class FormatRoundTripTests(unittest.TestCase):
     def test_litematic(self):
         p = Path(self.tmp.name) / 'a.litematic'
         save_any(p, self.s)
+        root = _nbt(p)
+        region = next(iter(_v(root, 'Regions', {}).values()))[1]
+        palette = [_state_name(x) for x in _list(_v(region, 'BlockStatePalette', {}))]
+        bits = max(2, (len(palette) - 1).bit_length())
+        raw = _longs(_v(region, 'BlockStates', []))
+        print('LITEMATIC DEBUG palette=', palette, 'longs=', raw, 'indices=', _bits(raw, bits, 12))
         self.check_modern_states(load_any(p))
 
     def test_obj_and_mtl(self):
