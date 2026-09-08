@@ -32,10 +32,14 @@ class BlockEditor(tk.Toplevel):
         ttk.Button(bar,text='TXT öffnen',command=self.open_txt).pack(side='left',padx=3)
         ttk.Button(bar,text='TXT speichern',command=self.save_txt).pack(side='left',padx=3)
         ttk.Button(bar,text='Neu',command=self.new_doc).pack(side='left',padx=3)
-        ttk.Label(bar,text='Layer Y:').pack(side='left',padx=(18,3))
-        self.ly=tk.IntVar(value=0); sp=ttk.Spinbox(bar,from_=0,to=max(0,self.s.height-1),textvariable=self.ly,width=6,command=self.layer_changed);sp.pack(side='left')
-        ttk.Button(bar,text='←',command=lambda:self.set_layer(self.layer-1)).pack(side='left',padx=2)
-        ttk.Button(bar,text='→',command=lambda:self.set_layer(self.layer+1)).pack(side='left',padx=2)
+        ttk.Label(bar,text='Ebene Y:').pack(side='left',padx=(18,3))
+        self.ly=tk.IntVar(value=0)
+        self.layer_spin=ttk.Spinbox(bar,from_=0,to=max(0,self.s.height-1),textvariable=self.ly,width=6,command=self.layer_changed)
+        self.layer_spin.pack(side='left')
+        ttk.Button(bar,text='▲',command=lambda:self.set_layer(self.layer+1)).pack(side='left',padx=2)
+        ttk.Button(bar,text='▼',command=lambda:self.set_layer(self.layer-1)).pack(side='left',padx=2)
+        ttk.Button(bar,text='Start',command=lambda:self.set_layer(0)).pack(side='left',padx=2)
+        ttk.Button(bar,text='Ende',command=lambda:self.set_layer(self.s.height-1)).pack(side='left',padx=2)
         ttk.Button(bar,text='3D',command=self.preview3d).pack(side='left',padx=(15,2))
         self.info=ttk.Label(bar,text=''); self.info.pack(side='right')
 
@@ -51,8 +55,14 @@ class BlockEditor(tk.Toplevel):
         ttk.Label(left,text='Linksklick = setzen\nRechtsklick = löschen',foreground='gray').pack(anchor='w',padx=8,pady=5)
         right=ttk.Frame(main);main.add(right,weight=1)
         self.canvas=tk.Canvas(right,background='#20242a',highlightthickness=0);self.canvas.pack(fill='both',expand=True)
-        self.canvas.bind('<Button-1>',self.paint);self.canvas.bind('<Button-3>',self.erase);self.canvas.bind('<B1-Motion>',self.paint);self.canvas.bind('<B3-Motion>',self.erase)
-        self.canvas.bind('<MouseWheel>',self.zoom)
+        self.canvas.bind('<Button-1>',self.paint);self.canvas.bind('<Button-3>',self.erase)
+        self.canvas.bind('<B1-Motion>',self.paint);self.canvas.bind('<B3-Motion>',self.erase)
+        # Mausrad = Ebene wechseln. Strg+Mausrad = in 10er-Schritten springen.
+        self.canvas.bind('<MouseWheel>',self.layer_wheel)
+        self.canvas.bind('<Button-4>',lambda e:self.layer_wheel_delta(1))
+        self.canvas.bind('<Button-5>',lambda e:self.layer_wheel_delta(-1))
+        self.bind('<MouseWheel>',self.layer_wheel)
+        self.bind('<Control-MouseWheel>',self.layer_wheel)
 
     def _load_palette(self):
         self.lb.delete(0,'end')
@@ -66,10 +76,28 @@ class BlockEditor(tk.Toplevel):
 
     def custom_selected(self):
         b=max(0,min(4095,int(self.idv.get())));m=max(0,min(15,int(self.mv.get())));self.selected=(b,m)
+        self._draw()
 
     def set_layer(self,y):
         y=max(0,min(self.s.height-1,int(y)));self.layer=y;self.ly.set(y);self._draw()
-    def layer_changed(self):self.set_layer(self.ly.get())
+
+    def layer_changed(self):
+        try:self.set_layer(self.ly.get())
+        except (ValueError,tk.TclError):pass
+
+    def layer_wheel_delta(self,delta):
+        step=10 if (self._ctrl_down()) else 1
+        self.set_layer(self.layer + (step if delta > 0 else -step))
+
+    def _ctrl_down(self):
+        try:return bool(self.tk.call('expr','{[%s state] & 0x4}' % self.winfo_name()))
+        except Exception:return False
+
+    def layer_wheel(self,event):
+        delta=1 if getattr(event,'delta',0)>0 else -1
+        step=10 if (event.state & 0x4) else 1
+        self.set_layer(self.layer + delta*step)
+        return 'break'
 
     def _index(self,x,y,z):return x+z*self.s.width+y*self.s.width*self.s.length
     def _draw(self):
@@ -80,7 +108,7 @@ class BlockEditor(tk.Toplevel):
                 x0,z0=x*cs,z*cs;x1,z1=x0+cs,z0+cs
                 self.canvas.create_rectangle(x0,z0,x1,z1,outline='#505761',fill=self._shade(b))
                 if b:self.canvas.create_text(x0+cs/2,z0+cs/2,text=str(b),fill='white',font=('Consolas',8))
-        self.info.config(text=f'{self.s.name} • {w}×{self.s.height}×{l} • Y={self.layer} • ID {self.selected[0]}:{self.selected[1]}')
+        self.info.config(text=f'{self.s.name} • {w}×{self.s.height}×{l} • Ebene Y={self.layer}/{max(0,self.s.height-1)} • ID {self.selected[0]}:{self.selected[1]}')
         self.canvas.config(scrollregion=(0,0,w*cs,l*cs))
 
     def _shade(self,b):
@@ -101,24 +129,36 @@ class BlockEditor(tk.Toplevel):
     def _set(self,x,y,z,b,m):
         i=self._index(x,y,z);lo=bytearray(self.s.blocks);da=bytearray(self.s.data);lo[i]=b&255;da[i]=m&15
         add=self.s.addblocks
+        aa=bytearray(add or bytes((self.s.width*self.s.height*self.s.length+1)//2))
         if b>255:
-            aa=bytearray(add or bytes((self.s.width*self.s.height*self.s.length+1)//2));hi=(b>>8)&15;aa[i//2]=(aa[i//2]& (0x0F if i%2==0 else 0xF0)) | (hi<<4 if i%2==0 else hi);add=bytes(aa)
+            hi=(b>>8)&15
+            aa[i//2]=(aa[i//2]& (0x0F if i%2==0 else 0xF0)) | (hi<<4 if i%2==0 else hi)
+            add=bytes(aa)
+        elif add:
+            # Clear an old AddBlocks nibble when replacing a >255 block with a legacy ID.
+            aa[i//2] &= 0x0F if i%2==0 else 0xF0
+            add=bytes(aa)
         self.s=Schematic(self.s.name,self.s.width,self.s.height,self.s.length,self.s.materials,bytes(lo),bytes(da),add);self._draw()
 
-    def zoom(self,event):
-        self.cell=max(8,min(64,self.cell+(4 if event.delta>0 else -4)));self._draw()
     def new_doc(self):
         if messagebox.askyesno('Neu','Aktuelles Bauwerk verwerfen?'):
-            self.s=self.new_schematic();self.layer=0;self.ly.set(0);self._draw()
+            self.s=self.new_schematic();self.layer=0;self.ly.set(0);self._update_layer_range();self._draw()
+
+    def _update_layer_range(self):
+        try:self.layer_spin.configure(from_=0,to=max(0,self.s.height-1))
+        except Exception:pass
+
     def open_txt(self):
         p=filedialog.askopenfilename(filetypes=[('TXT','*.txt')])
         if not p:return
-        try:self.s=__import__('src.txtformat',fromlist=['import_txt']).import_txt(p);self.layer=0;self.ly.set(0);self._draw()
+        try:self.s=__import__('src.txtformat',fromlist=['import_txt']).import_txt(p);self.layer=0;self.ly.set(0);self._update_layer_range();self._draw()
         except Exception as e:messagebox.showerror('Fehler',str(e))
+
     def save_txt(self):
         p=filedialog.asksaveasfilename(defaultextension='.txt',initialfile=Path(self.s.name).stem+'.txt',filetypes=[('TXT','*.txt')])
         if p:
             try:export_txt(self.s,p);messagebox.showinfo('Gespeichert','TXT wurde gespeichert.')
             except Exception as e:messagebox.showerror('Fehler',str(e))
+
     def preview3d(self):
         from .viewer3d import Viewer3D;Viewer3D(self,self.s)
