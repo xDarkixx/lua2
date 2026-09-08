@@ -10,13 +10,13 @@ class App(tk.Tk):
  def __init__(self):
   super().__init__();self.title('SchematicTxtGenerator – Offline Converter');self.geometry('1150x760');self.minsize(950,620);self.current=None;self.ui()
  def ui(self):
-  top=ttk.Frame(self,padding=18);top.pack(fill='x');ttk.Label(top,text='SchematicTxtGenerator',font=('Segoe UI',20,'bold')).pack(anchor='w');ttk.Label(top,text='Offline • Minecraft 1.7.10 • Schematica • Schematic • Sponge • Litematic • OBJ • reine TXT').pack(anchor='w',pady=(3,12))
+  top=ttk.Frame(self,padding=18);top.pack(fill='x');ttk.Label(top,text='SchematicTxtGenerator',font=('Segoe UI',20,'bold')).pack(anchor='w');ttk.Label(top,text='Offline • Version-unabhängig • Schematic • Sponge Schem • Litematic • OBJ • reine TXT').pack(anchor='w',pady=(3,4));ttk.Label(top,text='Kein Minecraft, keine Mods und keine Befehle für Konvertierung oder Bearbeitung erforderlich.',foreground='gray').pack(anchor='w',pady=(0,12))
   b=ttk.Frame(top);b.pack(fill='x')
-  for text,cmd in [('Datei öffnen',self.open_file),('→ TXT',self.to_txt),('Block-Editor',self.editor),('3D Vorschau',self.show3d),('Konvertieren',self.convert),('EXE kompilieren',self.build),('Build-Ordner',self.open_dist)]:ttk.Button(b,text=text,command=cmd).pack(side='left',padx=4)
+  for text,cmd in [('Datei öffnen',self.open_file),('TXT exportieren',self.to_txt),('Block-Editor',self.editor),('3D Vorschau',self.show3d),('Konvertieren',self.convert),('EXE kompilieren',self.build),('Build-Ordner',self.open_dist)]:ttk.Button(b,text=text,command=cmd).pack(side='left',padx=4)
   mid=ttk.Frame(self,padding=(18,0,18,8));mid.pack(fill='both',expand=True);self.tree=ttk.Treeview(mid,columns=('x','y','z','id','meta','state'),show='headings')
   for c,t,w in [('x','X',70),('y','Y',70),('z','Z',70),('id','Block-ID',110),('meta','Metadata',100),('state','Block-State',380)]:self.tree.heading(c,text=t);self.tree.column(c,width=w,anchor='center')
   sb=ttk.Scrollbar(mid,command=self.tree.yview);self.tree.configure(yscrollcommand=sb.set);self.tree.pack(side='left',fill='both',expand=True);sb.pack(side='right',fill='y')
-  bot=ttk.Frame(self,padding=18);bot.pack(fill='x');self.status=ttk.Label(bot,text='Bereit – der Converter benötigt Minecraft nicht.');self.status.pack(anchor='w');self.log=tk.Text(bot,height=8,font=('Consolas',9));self.log.pack(fill='x',pady=(5,0));self.log.insert('end','Offline-Konverter bereit. Eingaben: .schematic .schem .litematic .obj .txt\n')
+  bot=ttk.Frame(self,padding=18);bot.pack(fill='x');self.status=ttk.Label(bot,text='Bereit – version-unabhängiger Offline-Converter.');self.status.pack(anchor='w');self.log=tk.Text(bot,height=8,font=('Consolas',9));self.log.pack(fill='x',pady=(5,0));self.log.insert('end','Offline-Konverter bereit. Unterstützt: .schematic .schem .litematic .obj .txt\n')
  def add(self,s):self.log.insert('end',s+'\n');self.log.see('end')
  def preview(self,s):
   self.current=s
@@ -40,7 +40,7 @@ class App(tk.Tk):
   if not a:return
   b=filedialog.asksaveasfilename(defaultextension='.txt',initialfile=Path(a).stem+'.txt',filetypes=[('TXT','*.txt')])
   if not b:return
-  try:s=load_any(a);save_any(b,s);n=self.preview(s);self.status.config(text=f'→ TXT fertig • {s.width}×{s.height}×{s.length} • {n} Blöcke');self.add(Path(a).suffix+' → TXT: '+b);messagebox.showinfo('Fertig','TXT erfolgreich erstellt.')
+  try:s=load_any(a);save_any(b,s);n=self.preview(s);self.status.config(text=f'TXT fertig • {s.width}×{s.height}×{s.length} • {n} Blöcke');self.add(Path(a).suffix+' → TXT: '+b);messagebox.showinfo('Fertig','TXT erfolgreich erstellt.')
   except Exception as e:self.err(e)
  def editor(self):
   BlockEditor(self,self.current)
