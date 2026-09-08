@@ -81,7 +81,8 @@ def readp(f, t):
 
 
 def _open_read(path):
-    raw = open(path, 'rb').read()
+    with open(path, 'rb') as source:
+        raw = source.read()
     if raw[:2] == b'\x1f\x8b':
         return gzip.GzipFile(fileobj=io.BytesIO(raw), mode='rb')
     return io.BytesIO(raw)
