@@ -10,7 +10,7 @@ class Viewer3D(tk.Toplevel):
   super().__init__(master);self.s=s;self.title('3D Vorschau – version-unabhängig');self.geometry('980x700');self.minsize(760,520)
   self.c=tk.Canvas(self,bg='#17191d',highlightthickness=0);self.c.pack(fill='both',expand=True)
   self.info=tk.Label(self,text='',anchor='w');self.info.pack(fill='x',padx=8,pady=4)
-  self.a=.7;self.p=.5;self.z=10;self.d=None;self._after=None
+  self.a=.7;self.p=.5;self.z=10;self.d=None;self._after=None;self._blocks_cache=None;self._blocks_cache_key=None
   self.c.bind('<MouseWheel>',self.wheel);self.c.bind('<Button-4>',lambda e:self.zoom(1));self.c.bind('<Button-5>',lambda e:self.zoom(-1));self.c.bind('<B1-Motion>',self.move);self.c.bind('<Button-1>',self.down);self.bind('<Configure>',self._resize)
   self.draw()
  def down(self,e):self.d=(e.x,e.y,self.a,self.p)
@@ -26,6 +26,8 @@ class Viewer3D(tk.Toplevel):
  def q(self,x,y,z):
   x-=self.s.width/2;z-=self.s.length/2;y-=self.s.height/2;ca,sa=math.cos(self.a),math.sin(self.a);xx=x*ca-z*sa;zz=x*sa+z*ca;cp,sp=math.cos(self.p),math.sin(self.p);yy=y*cp-zz*sp;return self.c.winfo_width()/2+xx*self.z,self.c.winfo_height()/2-yy*self.z,y*sp+zz*cp
  def _preview_blocks(self):
+  key=(id(self.s),id(self.s.blocks),id(getattr(self.s,'addblocks',None)),self.s.width,self.s.height,self.s.length)
+  if self._blocks_cache_key==key and self._blocks_cache is not None:return self._blocks_cache
   w,h,l=self.s.width,self.s.height,self.s.length;blocks=[]
   for y in range(h):
    for z in range(l):
@@ -34,8 +36,10 @@ class Viewer3D(tk.Toplevel):
      i=x+base
      if self.s.block_id(i):blocks.append((x,y,z))
   total=len(blocks)
-  if total<=MAX_RENDER_BLOCKS:return blocks,total,False
-  step=max(1,math.ceil(total/MAX_RENDER_BLOCKS));return blocks[::step][:MAX_RENDER_BLOCKS],total,True
+  if total<=MAX_RENDER_BLOCKS:result=(blocks,total,False)
+  else:
+   step=max(1,math.ceil(total/MAX_RENDER_BLOCKS));result=(blocks[::step][:MAX_RENDER_BLOCKS],total,True)
+  self._blocks_cache_key=key;self._blocks_cache=result;return result
  def draw(self):
   self.c.delete('all')
   if min(self.s.width,self.s.height,self.s.length)<=0:return
