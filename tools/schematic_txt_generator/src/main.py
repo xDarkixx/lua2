@@ -2,9 +2,9 @@ import os,threading
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
-from .schematic import load_schematic,save_schematic
-from .txtformat import export_txt,import_txt
-from .build_tool import main as build_main
+from src.schematic import load_schematic,save_schematic
+from src.txtformat import export_txt,import_txt
+from src.build_tool import main as build_main
 class App(tk.Tk):
  def __init__(self):
   super().__init__();self.title('SchematicTxtGenerator');self.geometry('1050x700');self.minsize(850,560);self.ui()
@@ -16,7 +16,7 @@ class App(tk.Tk):
   for c,t,w in [('x','X',90),('y','Y',90),('z','Z',90),('id','Block-ID',130),('meta','Metadata',110)]:self.tree.heading(c,text=t);self.tree.column(c,width=w,anchor='center')
   sb=ttk.Scrollbar(mid,command=self.tree.yview);self.tree.configure(yscrollcommand=sb.set);self.tree.pack(side='left',fill='both',expand=True);sb.pack(side='right',fill='y')
   bot=ttk.Frame(self,padding=18);bot.pack(fill='x');self.status=ttk.Label(bot,text='Bereit.');self.status.pack(anchor='w');self.log=tk.Text(bot,height=8,font=('Consolas',9));self.log.pack(fill='x',pady=(5,0));self.log.insert('end','Bereit.\n')
- def add(self,s):self.log.insert('end',s+'\n');self.log.see('end')
+ def add(self,s):self.after(0,lambda:(self.log.insert('end',s+'\n'),self.log.see('end')))
  def preview(self,s):
   for x in self.tree.get_children():self.tree.delete(x)
   n=0
@@ -42,16 +42,15 @@ class App(tk.Tk):
   if not b:return
   try:s=import_txt(a);save_schematic(b,s);n=self.preview(s);self.status.config(text=f'Erstellt • {s.width}×{s.height}×{s.length} • {n} Nicht-Luft-Blöcke');self.add('TXT → Schematic: '+b);messagebox.showinfo('Fertig','Schematic erfolgreich erstellt.')
   except Exception as e:self.err(e)
- def err(self,e):self.add('FEHLER: '+str(e));messagebox.showerror('Fehler',str(e))
+ def err(self,e):self.add('FEHLER: '+str(e));self.after(0,lambda:messagebox.showerror('Fehler',str(e)))
  def build(self):
   self.add('Build gestartet...')
   def job():
-   try:
-    build_main(self.add);self.after(0,lambda:messagebox.showinfo('Build fertig','dist\\SchematicTxtGenerator.exe wurde erstellt.'))
-   except Exception as e:self.after(0,lambda:self.err(e))
+   try:build_main(self.add);self.after(0,lambda:messagebox.showinfo('Build fertig','dist\\SchematicTxtGenerator.exe wurde erstellt.'))
+   except Exception as e:self.err(e)
   threading.Thread(target=job,daemon=True).start()
  def open_dist(self):
   p=Path(__file__).resolve().parent.parent/'dist';p.mkdir(exist_ok=True)
   try:os.startfile(p)
-  except: self.add(str(p))
+  except Exception:self.add(str(p))
 if __name__=='__main__':App().mainloop()
