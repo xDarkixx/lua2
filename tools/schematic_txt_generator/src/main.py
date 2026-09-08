@@ -17,7 +17,10 @@ class App(tk.Tk):
   for c,t,w in [('x','X',70),('y','Y',70),('z','Z',70),('id','Block-ID',110),('meta','Metadata',100),('state','Block-State',380)]:self.tree.heading(c,text=t);self.tree.column(c,width=w,anchor='center')
   sb=ttk.Scrollbar(mid,command=self.tree.yview);self.tree.configure(yscrollcommand=sb.set);self.tree.pack(side='left',fill='both',expand=True);sb.pack(side='right',fill='y')
   bot=ttk.Frame(self,padding=18);bot.pack(fill='x');self.status=ttk.Label(bot,text='Bereit – version-unabhängiger Offline-Converter.');self.status.pack(anchor='w');self.log=tk.Text(bot,height=8,font=('Consolas',9));self.log.pack(fill='x',pady=(5,0));self.log.insert('end','Offline-Konverter bereit. Unterstützt: .schematic .schem .litematic .obj .txt\n')
- def add(self,s):self.log.insert('end',s+'\n');self.log.see('end')
+ def add(self,s):
+  if threading.current_thread() is not threading.main_thread():
+   self.after(0,self.add,s);return
+  self.log.insert('end',s+'\n');self.log.see('end')
  def preview(self,s):
   self.current=s
   for x in self.tree.get_children():self.tree.delete(x)
@@ -54,12 +57,17 @@ class App(tk.Tk):
  def show3d(self):
   if self.current is None:self.open_file()
   if self.current is not None:Viewer3D(self,self.current)
- def err(self,e):self.add('FEHLER: '+str(e));messagebox.showerror('Fehler',str(e))
+ def err(self,e):
+  if threading.current_thread() is not threading.main_thread():
+   self.after(0,self.err,e);return
+  self.add('FEHLER: '+str(e));messagebox.showerror('Fehler',str(e))
  def build(self):
   self.add('Build gestartet...')
   def job():
-   try:build_main(self.add);self.after(0,lambda:messagebox.showinfo('Build fertig','dist\\SchematicTxtGenerator.exe wurde erstellt.'))
-   except Exception as e:self.err(e)
+   try:
+    build_main(self.add)
+    self.after(0,lambda:messagebox.showinfo('Build fertig','dist\\SchematicTxtGenerator.exe wurde erstellt.'))
+   except Exception as e:self.after(0,self.err,e)
   threading.Thread(target=job,daemon=True).start()
  def open_dist(self):
   p=Path(__file__).resolve().parent.parent/'dist';p.mkdir(exist_ok=True)
