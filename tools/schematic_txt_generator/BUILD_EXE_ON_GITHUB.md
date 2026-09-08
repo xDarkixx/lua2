@@ -6,22 +6,25 @@ Der SchematicTxtGenerator kann als **eine einzelne Windows-EXE** gebaut werden. 
 
 GitHub Actions baut die EXE bei Änderungen unter `tools/schematic_txt_generator/` und kann zusätzlich manuell gestartet werden.
 
-Workflow:
+Der zentrale Workflow ist:
 
-`.github/workflows/schematic-converter.yml`
+`.github/workflows/schematic-txt-generator.yml`
 
 Der Build:
 
 1. startet auf `windows-latest`
 2. installiert Python und PyInstaller nur auf dem Build-Runner
 3. führt die Tests aus
-4. erstellt `SchematicTxtGenerator.exe` mit `console=False`
-5. prüft, ob die EXE wirklich vorhanden und plausibel groß ist
-6. lädt nur die fertige EXE als GitHub-Artifact hoch
+4. erstellt `SchematicTxtGenerator.exe` als Einzeldatei
+5. prüft, ob die EXE vorhanden ist
+6. lädt die fertige EXE als GitHub-Artifact hoch
+7. hängt die EXE bei einem veröffentlichten GitHub Release automatisch an das Release an
 
 ## EXE herunterladen
 
-Im Repository unter **Actions** den Workflow `SchematicTxtGenerator Windows EXE` öffnen, einen erfolgreichen Lauf auswählen und unter **Artifacts** `SchematicTxtGenerator-Windows` herunterladen.
+Im Repository unter **Actions** den Workflow `SchematicTxtGenerator EXE` öffnen, einen erfolgreichen Lauf auswählen und unter **Artifacts** `SchematicTxtGenerator-Windows` herunterladen.
+
+Bei einem veröffentlichten Release wird die EXE außerdem direkt als Release-Datei angehängt.
 
 ## Lokaler Build
 
@@ -42,7 +45,7 @@ dist\SchematicTxtGenerator.exe
 - `.schematic` – klassisches MCEdit/Schematica-Format
 - `.schem` – Sponge Schematic
 - `.litematic` – Litematica
-- `.obj` – Voxel-OBJ des Projekts
+- `.obj` – Voxel-OBJ des Projekts, inklusive gespeicherter Abmessungen
 - `.txt` – neutrales, Minecraft-versionsunabhängiges Textformat
 
 Das interne Modell ist voxelbasiert. Dadurch kann zwischen den Formaten konvertiert werden, ohne Minecraft selbst zu starten.
