@@ -1,24 +1,24 @@
 # SchematicTxtGenerator – Windows
 
-Windows-GUI zum Umwandeln und Prüfen von Minecraft-Bauwerken.
+Offline-Windows-GUI zum Konvertieren, Prüfen und Bearbeiten von Minecraft-Bauwerken. **Minecraft muss auf dem PC nicht installiert oder gestartet sein.**
 
-## Unterstützte Eingabe- und Ausgabeformate
+## Unterstützte Formate
 
-- `.schematic` – klassisches gzip-NBT, kompatibel mit Minecraft 1.7.10/Schematica/WorldEdit
-- `.schem` – Sponge Schematic mit Palette und VarInt-Blockdaten
-- `.litematic` – Litematica mit Region, Palette und gepackten Long-Blockdaten
-- `.obj` + `.mtl` – voxelbasierter OBJ-Export; Block-ID/Metadata werden im Objektnamen erhalten
-- `.txt` – einfaches, editierbares `SCHEMATIC_TXT 1` Format
+- `.schematic` – klassisches gzip-NBT für Minecraft 1.7.10/Schematica/WorldEdit
+- `.schem` – Sponge Schematic
+- `.litematic` – Litematica
+- `.obj` – voxelbasierter OBJ-Import/Export
+- `.txt` – reines `SCHEMATIC_TXT 1` Textformat
 
-Damit kann jede der unterstützten Eingaben über **→ TXT** nach TXT konvertiert werden. Über **Konvertieren** sind alle fünf Zielformate verfügbar.
+## Ziel: eine reine TXT
 
-## OpenComputers: nur eine reine TXT-Datei
+Der Konverter kann ein Bauwerk komplett außerhalb von Minecraft einlesen und als **eine einzige normale UTF-8-TXT-Datei** ausgeben. Diese Datei enthält Abmessungen, Koordinaten, Block-ID, Metadata und – wenn vorhanden – den Block-State.
 
-Der OpenComputers-Weg braucht für den Bau **keine `.schematic`, `.schem`, `.litematic` oder Minecraft-Konverterdatei**. Der Konverter läuft außerhalb von Minecraft und erzeugt eine einzige normale UTF-8-Textdatei:
+Beispiel:
 
 ```text
 SCHEMATIC_TXT 1
-name=MeineSchematic
+name=MeinBauwerk
 size=20,10,30
 materials=Alpha
 
@@ -27,57 +27,45 @@ materials=Alpha
 2,0,0=20:0
 ```
 
-Diese `blueprint.txt` kann auf das OpenComputers-Dateisystem kopiert werden. Das mitgelieferte `opencomputers/builder.lua` liest genau diese Textdatei, baut von unten nach oben und speichert bei einem Abbruch den nächsten Block in `blueprint.txt.state`.
+Die TXT ist bewusst einfach gehalten: Sie kann auf beliebige Dateisysteme kopiert, archiviert oder von einem eigenen Roboter-/Builder-System eingelesen werden. Der Converter selbst enthält **keine zwingende Lua-Abhängigkeit** und benötigt für die Konvertierung kein Minecraft.
 
-### Robot starten
+## Block-Editor
 
-1. `blueprint.txt` auf den OpenComputers-Robot kopieren.
-2. `builder.lua` auf den Robot kopieren.
-3. Den Robot **einen Block vor X=0** stellen: relative Position `(-1,0,0)`.
-4. Robot nach **+X** ausrichten.
-5. Benötigte Baumaterialien in das Roboter-Inventar legen.
-6. Starten:
+Der integrierte **Block-Editor** arbeitet direkt auf dem reinen Datenmodell. Funktionen:
 
-```text
-builder.lua blueprint.txt
-```
+- vorhandene TXT öffnen und wieder als TXT speichern
+- neues Bauwerk erstellen
+- Layer über Y auswählen
+- Blöcke per Linksklick setzen
+- Blöcke per Rechtsklick löschen
+- Zoom für große Layer
+- Block-ID 0–4095 und Metadata 0–15 manuell eingeben
+- kleine integrierte 1.7.10-Blockpalette
+- direkte 3D-Vorschau des bearbeiteten Bauwerks
 
-Der Builder arbeitet Layer für Layer (`Y` aufsteigend) und führt die Koordinaten direkt aus der TXT-Datei aus. Ein `inventory_controller` kann verwendet werden, damit Metadaten beim Auswählen des Materials berücksichtigt werden.
+Damit lässt sich eine TXT auch komplett ohne Ausgangs-Schematic erstellen oder korrigieren.
 
-### Material-Slots in derselben TXT-Datei
+## 3D-Vorschau
 
-Wenn die automatische Auswahl nicht eindeutig ist, können im gleichen Text zusätzliche `slot=`-Zeilen stehen. Beispiel:
+Die 3D-Ansicht läuft lokal über die Daten aus der Datei. Sie benötigt kein Minecraft. Das Bauwerk kann gedreht und gezoomt werden.
 
-```text
-slot=1,1:0
-slot=2,4:0
-```
+## Konvertierung
 
-Damit wird `1:0` aus Slot 1 und `4:0` aus Slot 2 genommen. Es bleibt trotzdem **nur eine Blueprint-TXT-Datei**; es ist keine zusätzliche Materialdatei erforderlich.
+`Datei öffnen` lädt eine Datei und zeigt Dimensionen sowie Blockdaten. `→ TXT` erzeugt direkt die portable Textdatei. `Konvertieren` kann weiterhin zwischen den unterstützten Formaten umwandeln.
 
-> Hinweis: Ein OpenComputers-Robot kann nur Materialien platzieren, die tatsächlich als passende Itemstacks im Inventar vorhanden sind. Die TXT-Datei beschreibt den Bauplan; sie erzeugt oder beschafft keine Items.
+## OpenComputers
 
-## Minecraft 1.7.10
+Der Converter erzeugt nur den Bauplan. Es ist absichtlich **kein OpenComputers-Lua-Builder Bestandteil des Converters**. Der erzeugte TXT-Bauplan kann später von einem eigenen OpenComputers-/Robot-Programm eingelesen werden.
 
-`.schematic` ist das Zielformat für die klassische Minecraft-1.7.10-Welt. IDs bis 4095 und Metadata 0–15 werden unterstützt. Bei `.schem`/`.litematic` sind moderne Blockstates zusätzlich intern vorhanden; für nicht bekannte moderne Blockstates kann die Rückführung auf eine 1.7.10-ID verlustbehaftet sein.
+Wichtig: Die TXT beschreibt die gewünschten Blöcke; sie kann ohne Kenntnis der tatsächlich vorhandenen Items nicht garantieren, dass ein Robot jeden Block platzieren kann. Die konkrete Materialversorgung ist Sache des Roboters bzw. der Minecraft-Mods.
 
-## OBJ
+## Windows / EXE
 
-Der OBJ-Export erzeugt pro nicht-leerem Block einen Würfel und eine passende `.mtl` Datei. Die Objektnamen haben das Schema:
-
-`block_ID_META_xX_yY_zZ`
-
-Dadurch kann ein von diesem Programm erzeugtes OBJ wieder zuverlässig eingelesen werden. Ein beliebiges extern erzeugtes OBJ ist dagegen nur dann importierbar, wenn es diese Blockobjekte enthält; allgemeine Meshes werden nicht stillschweigend in Minecraft-Blöcke umgewandelt.
-
-## Start / EXE
-
-Die vorhandenen Windows-Start- und Build-Skripte können weiterhin verwendet werden. Die GUI prüft beim Konvertieren das Dateiformat und meldet ungültige NBT-, TXT- oder OBJ-Daten als Fehler.
+Mit `Start_Generator.bat` kann die GUI gestartet werden. Mit `Build_EXE.bat` bzw. dem Button `EXE kompilieren` kann die Windows-EXE gebaut werden.
 
 ## Tests
 
 Unter `tests/test_formats.py` liegen Round-Trip-Tests für TXT, `.schematic`, `.schem`, `.litematic` und OBJ/MTL.
-
-Test lokal:
 
 ```bat
 python -m unittest discover -s tests -v
