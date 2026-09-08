@@ -2,7 +2,7 @@ import re
 from .schematic import Schematic
 HEADER='SCHEMATIC_TXT 1'
 RX=re.compile(r'^\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*=\s*(\d+)\s*(?::\s*(\d+))?\s*$')
-SRX=re.compile(r'^\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*=\s*(.+?)\s*$')
+
 def export_txt(s,path,include_air=False):
  with open(path,'w',encoding='utf-8',newline='\n') as f:
   f.write(HEADER+'\nname='+s.name+'\nsize=%d,%d,%d\nmaterials=%s\n\n'%(s.width,s.height,s.length,s.materials))
@@ -15,31 +15,32 @@ def export_txt(s,path,include_air=False):
       f.write(f'{x},{y},{z}={b}:{m}')
       if i in states:f.write(' # state='+states[i])
       f.write('\n')
+
 def import_txt(path):
- name='Schematic';materials='Alpha';size=None;blocks={};states={}
- with open(path,encoding='utf-8-sig') as f:lines=f.readlines()
- if not lines or lines[0].strip()!=HEADER:raise ValueError('Ungültiger TXT-Header.')
- for no,line in enumerate(lines[1:],2):
-  s=line.strip()
-  if not s or s.startswith('#'):continue
-  if s.startswith('name='):name=s[5:].strip() or 'Schematic';continue
-  if s.startswith('materials='):materials=s[10:].strip() or 'Alpha';continue
-  if s.startswith('size='):
-   try:size=tuple(int(v.strip()) for v in s[5:].split(','))
-   except:raise ValueError(f'Zeile {no}: size ungültig.')
-   if len(size)!=3 or any(v<=0 for v in size):raise ValueError(f'Zeile {no}: size muss positive W,H,L sein.')
-   continue
-  raw=s;state=None
-  if ' # state=' in raw:
-   raw,state=raw.split(' # state=',1);state=state.strip()
-  m=RX.match(raw)
-  if not m:raise ValueError(f'Zeile {no}: unbekannte Syntax.')
-  if size is None:raise ValueError('size= fehlt vor Blockdaten.')
-  x,y,z,bid,meta=m.groups();x,y,z,bid=int(x),int(y),int(z),int(bid);meta=int(meta or 0);w,h,l=size
-  if not(0<=x<w and 0<=y<h and 0<=z<l):raise ValueError(f'Zeile {no}: Koordinate außerhalb.')
-  if bid>4095 or bid<0 or meta>15 or meta<0:raise ValueError(f'Zeile {no}: ungültige Block-ID/Metadata.')
-  i=x+z*w+y*w*l;blocks[(x,y,z)]=(bid,meta)
-  if state:states[i]=state
+ name='Schematic';materials='Universal';size=None;blocks={};states={}
+ with open(path,encoding='utf-8-sig') as f:
+  first=f.readline()
+  if not first or first.strip()!=HEADER:raise ValueError('Ungültiger TXT-Header.')
+  for no,line in enumerate(f,2):
+   s=line.strip()
+   if not s or s.startswith('#'):continue
+   if s.startswith('name='):name=s[5:].strip() or 'Schematic';continue
+   if s.startswith('materials='):materials=s[10:].strip() or 'Universal';continue
+   if s.startswith('size='):
+    try:size=tuple(int(v.strip()) for v in s[5:].split(','))
+    except Exception:raise ValueError(f'Zeile {no}: size ungültig.')
+    if len(size)!=3 or any(v<=0 for v in size):raise ValueError(f'Zeile {no}: size muss positive W,H,L sein.')
+    continue
+   raw=s;state=None
+   if ' # state=' in raw:raw,state=raw.split(' # state=',1);state=state.strip()
+   m=RX.match(raw)
+   if not m:raise ValueError(f'Zeile {no}: unbekannte Syntax.')
+   if size is None:raise ValueError('size= fehlt vor Blockdaten.')
+   x,y,z,bid,meta=m.groups();x,y,z,bid=int(x),int(y),int(z),int(bid);meta=int(meta or 0);w,h,l=size
+   if not(0<=x<w and 0<=y<h and 0<=z<l):raise ValueError(f'Zeile {no}: Koordinate außerhalb.')
+   if bid>4095 or bid<0 or meta>15 or meta<0:raise ValueError(f'Zeile {no}: ungültige Block-ID/Metadata.')
+   i=x+z*w+y*w*l;blocks[(x,y,z)]=(bid,meta)
+   if state:states[i]=state
  if size is None:raise ValueError('size= fehlt.')
  w,h,l=size;total=w*h*l;low=bytearray(total);data=bytearray(total)
  for (x,y,z),(b,m) in blocks.items():i=x+z*w+y*w*l;low[i]=b&255;data[i]=m&15
