@@ -5,18 +5,19 @@ from tkinter import ttk,filedialog,messagebox
 from src.format_router import load_any,save_any
 from src.build_tool import main as build_main
 from src.viewer3d import Viewer3D
+from src.block_editor import BlockEditor
 class App(tk.Tk):
  def __init__(self):
-  super().__init__();self.title('SchematicTxtGenerator – Multi Format');self.geometry('1100x720');self.minsize(900,580);self.current=None;self.ui()
+  super().__init__();self.title('SchematicTxtGenerator – Offline Converter');self.geometry('1150x760');self.minsize(950,620);self.current=None;self.ui()
  def ui(self):
-  top=ttk.Frame(self,padding=18);top.pack(fill='x');ttk.Label(top,text='SchematicTxtGenerator',font=('Segoe UI',20,'bold')).pack(anchor='w');ttk.Label(top,text='Minecraft 1.7.10 • Schematica • .schematic • .schem • .litematic • .obj • TXT').pack(anchor='w',pady=(3,12))
+  top=ttk.Frame(self,padding=18);top.pack(fill='x');ttk.Label(top,text='SchematicTxtGenerator',font=('Segoe UI',20,'bold')).pack(anchor='w');ttk.Label(top,text='Offline • Minecraft 1.7.10 • Schematica • Schematic • Sponge • Litematic • OBJ • reine TXT').pack(anchor='w',pady=(3,12))
   b=ttk.Frame(top);b.pack(fill='x')
-  for text,cmd in [('Datei öffnen',self.open_file),('→ TXT',self.to_txt),('Konvertieren',self.convert),('3D Vorschau',self.show3d),('EXE kompilieren',self.build),('Build-Ordner',self.open_dist)]:ttk.Button(b,text=text,command=cmd).pack(side='left',padx=5)
+  for text,cmd in [('Datei öffnen',self.open_file),('→ TXT',self.to_txt),('Block-Editor',self.editor),('3D Vorschau',self.show3d),('Konvertieren',self.convert),('EXE kompilieren',self.build),('Build-Ordner',self.open_dist)]:ttk.Button(b,text=text,command=cmd).pack(side='left',padx=4)
   mid=ttk.Frame(self,padding=(18,0,18,8));mid.pack(fill='both',expand=True);self.tree=ttk.Treeview(mid,columns=('x','y','z','id','meta','state'),show='headings')
-  for c,t,w in [('x','X',70),('y','Y',70),('z','Z',70),('id','Block-ID',110),('meta','Metadata',100),('state','Block-State',360)]:self.tree.heading(c,text=t);self.tree.column(c,width=w,anchor='center')
+  for c,t,w in [('x','X',70),('y','Y',70),('z','Z',70),('id','Block-ID',110),('meta','Metadata',100),('state','Block-State',380)]:self.tree.heading(c,text=t);self.tree.column(c,width=w,anchor='center')
   sb=ttk.Scrollbar(mid,command=self.tree.yview);self.tree.configure(yscrollcommand=sb.set);self.tree.pack(side='left',fill='both',expand=True);sb.pack(side='right',fill='y')
-  bot=ttk.Frame(self,padding=18);bot.pack(fill='x');self.status=ttk.Label(bot,text='Bereit.');self.status.pack(anchor='w');self.log=tk.Text(bot,height=8,font=('Consolas',9));self.log.pack(fill='x',pady=(5,0));self.log.insert('end','Bereit. Unterstützte Eingaben: .schematic .schem .litematic .obj .txt\n')
- def add(self,s):self.after(0,lambda:(self.log.insert('end',s+'\n'),self.log.see('end')))
+  bot=ttk.Frame(self,padding=18);bot.pack(fill='x');self.status=ttk.Label(bot,text='Bereit – der Converter benötigt Minecraft nicht.');self.status.pack(anchor='w');self.log=tk.Text(bot,height=8,font=('Consolas',9));self.log.pack(fill='x',pady=(5,0));self.log.insert('end','Offline-Konverter bereit. Eingaben: .schematic .schem .litematic .obj .txt\n')
+ def add(self,s):self.log.insert('end',s+'\n');self.log.see('end')
  def preview(self,s):
   self.current=s
   for x in self.tree.get_children():self.tree.delete(x)
@@ -30,7 +31,7 @@ class App(tk.Tk):
       n+=1
   return n
  def open_file(self):
-  a=filedialog.askopenfilename(filetypes=[('Unterstützte Formate','*.schematic *.schem *.litematic *.obj *.txt'),('Schematic','*.schematic'),('Sponge Schematic','*.schem'),('Litematic','*.litematic'),('Wavefront OBJ','*.obj'),('TXT','*.txt')])
+  a=filedialog.askopenfilename(filetypes=[('Unterstützte Formate','*.schematic *.schem *.litematic *.obj *.txt')])
   if not a:return
   try:s=load_any(a);n=self.preview(s);self.status.config(text=f'Geladen • {s.width}×{s.height}×{s.length} • {n} Blöcke');self.add('Geöffnet: '+a)
   except Exception as e:self.err(e)
@@ -41,6 +42,8 @@ class App(tk.Tk):
   if not b:return
   try:s=load_any(a);save_any(b,s);n=self.preview(s);self.status.config(text=f'→ TXT fertig • {s.width}×{s.height}×{s.length} • {n} Blöcke');self.add(Path(a).suffix+' → TXT: '+b);messagebox.showinfo('Fertig','TXT erfolgreich erstellt.')
   except Exception as e:self.err(e)
+ def editor(self):
+  BlockEditor(self,self.current)
  def convert(self):
   a=filedialog.askopenfilename(filetypes=[('Unterstützte Formate','*.schematic *.schem *.litematic *.obj *.txt')])
   if not a:return
@@ -51,7 +54,7 @@ class App(tk.Tk):
  def show3d(self):
   if self.current is None:self.open_file()
   if self.current is not None:Viewer3D(self,self.current)
- def err(self,e):self.add('FEHLER: '+str(e));self.after(0,lambda:messagebox.showerror('Fehler',str(e)))
+ def err(self,e):self.add('FEHLER: '+str(e));messagebox.showerror('Fehler',str(e))
  def build(self):
   self.add('Build gestartet...')
   def job():
