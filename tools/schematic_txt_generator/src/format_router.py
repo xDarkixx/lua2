@@ -125,7 +125,7 @@ def save_litematic(path,s):
     root={'MinecraftDataVersion':(3,1976),'Version':(3,6),'SubVersion':(3,1),'Name':(8,s.name),'Regions':(10,{'Schematic':(10,region)})};write(path,'Litematic',root)
 
 def save_obj(path,s):
-    path=Path(path);mtl=path.with_suffix('.mtl');lines=['# Minecraft block voxel export','mtllib '+mtl.name];v=1;materials=set()
+    path=Path(path);mtl=path.with_suffix('.mtl');lines=['# Minecraft block voxel export','# SchematicTxtGenerator-Dimensions: %d %d %d'%(s.width,s.height,s.length),'mtllib '+mtl.name];v=1;materials=set()
     for y in range(s.height):
         for z in range(s.length):
             for x in range(s.width):
@@ -137,11 +137,14 @@ def save_obj(path,s):
     path.write_text('\n'.join(lines)+'\n',encoding='utf-8');mtl.write_text('\n'.join(['newmtl '+m+'\nKd 0.8 0.8 0.8' for m in sorted(materials)])+'\n',encoding='utf-8')
 
 def load_obj(path):
-    path=Path(path);names=[];has_vertex=False
+    path=Path(path);names=[];has_vertex=False;dimensions=None
     for line in path.read_text(encoding='utf-8',errors='replace').splitlines():
         q=line.strip().split()
         if not q:continue
         if q[0]=='v' and len(q)>=4:has_vertex=True
+        elif q[0]=='#' and len(q)>=5 and q[1]=='SchematicTxtGenerator-Dimensions:':
+            try: dimensions=tuple(int(x) for x in q[2:5])
+            except ValueError: dimensions=None
         elif q[0] in ('o','g') and len(q)>1:names.append(q[1])
     if not has_vertex:raise ValueError('OBJ enthält keine Vertices.')
     parsed=[]
@@ -149,9 +152,13 @@ def load_obj(path):
         m=re.fullmatch(r'block_(\d+)_(\d+)_x(-?\d+)_y(-?\d+)_z(-?\d+)',n)
         if m:parsed.append(tuple(map(int,m.groups())))
     if not parsed:raise ValueError('OBJ enthält keine SchematicTxtGenerator-Blockobjekte (block_ID_META_xX_yY_zZ).')
-    w=max(x for _,_,x,_,_ in parsed)+1;h=max(y for _,_,_,y,_ in parsed)+1;l=max(z for _,_,_,_,z in parsed)+1;low=bytearray(w*h*l);data=bytearray(w*h*l)
+    if dimensions and len(dimensions)==3 and all(v>0 for v in dimensions):
+        w,h,l=dimensions
+    else:
+        w=max(x for _,_,x,_,_ in parsed)+1;h=max(y for _,_,_,y,_ in parsed)+1;l=max(z for _,_,_,_,z in parsed)+1
+    low=bytearray(w*h*l);data=bytearray(w*h*l)
     for bid,md,x,y,z in parsed:
-        if x<0 or y<0 or z<0:continue
+        if x<0 or y<0 or z<0 or x>=w or y>=h or z>=l:continue
         i=x+z*w+y*w*l;low[i]=bid&255;data[i]=md&15
     return Schematic(path.stem,w,h,l,'Universal',bytes(low),bytes(data))
 
