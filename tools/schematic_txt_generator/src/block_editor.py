@@ -3,6 +3,7 @@ from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 from .schematic import Schematic
 from .txtformat import export_txt
+from .format_router import load_any
 
 PALETTE = [
     ('Air',0,0),('Stone',1,0),('Grass',2,0),('Dirt',3,0),('Cobblestone',4,0),
@@ -14,7 +15,7 @@ PALETTE = [
 class BlockEditor(tk.Toplevel):
     def __init__(self, master, schematic=None):
         super().__init__(master)
-        self.title('Block-Editor – SCHEMATIC_TXT')
+        self.title('Block-Editor – version-unabhängig')
         self.geometry('1120x800'); self.minsize(900,620)
         self.s = schematic or self.new_schematic()
         self.selected = (1,0); self.layer = 0; self.cell = 28
@@ -23,16 +24,18 @@ class BlockEditor(tk.Toplevel):
         self.bind('<Control-MouseWheel>', self.layer_fast)
         self.bind('<Prior>', lambda e: self.set_layer(self.layer-1))
         self.bind('<Next>', lambda e: self.set_layer(self.layer+1))
+        self.bind('<Up>', lambda e: self.set_layer(self.layer+1))
+        self.bind('<Down>', lambda e: self.set_layer(self.layer-1))
         self.bind('<Home>', lambda e: self.set_layer(0))
         self.bind('<End>', lambda e: self.set_layer(self.s.height-1))
 
     def new_schematic(self):
         w,h,l=16,8,16; total=w*h*l
-        return Schematic('Neues Bauwerk',w,h,l,'Alpha',bytes(total),bytes(total))
+        return Schematic('Neues Bauwerk',w,h,l,'Universal',bytes(total),bytes(total))
 
     def _ui(self):
         bar=ttk.Frame(self,padding=8); bar.pack(fill='x')
-        ttk.Button(bar,text='TXT öffnen',command=self.open_txt).pack(side='left',padx=3)
+        ttk.Button(bar,text='Datei öffnen',command=self.open_file).pack(side='left',padx=3)
         ttk.Button(bar,text='TXT exportieren',command=self.save_txt).pack(side='left',padx=3)
         ttk.Button(bar,text='Neu',command=self.new_doc).pack(side='left',padx=3)
         ttk.Separator(bar,orient='vertical').pack(side='left',fill='y',padx=10)
@@ -50,13 +53,13 @@ class BlockEditor(tk.Toplevel):
 
         main=ttk.Panedwindow(self,orient='horizontal');main.pack(fill='both',expand=True,padx=8,pady=8)
         left=ttk.Frame(main,width=230);main.add(left,weight=0)
-        ttk.Label(left,text='Blöcke').pack(anchor='w',padx=6,pady=4)
+        ttk.Label(left,text='Blöcke / Legacy-Auswahl').pack(anchor='w',padx=6,pady=4)
         self.lb=tk.Listbox(left,exportselection=False,height=25);self.lb.pack(fill='both',expand=True,padx=6);self.lb.bind('<<ListboxSelect>>',self.palette_selected)
         form=ttk.Frame(left,padding=6);form.pack(fill='x')
         ttk.Label(form,text='ID').grid(row=0,column=0);self.idv=tk.IntVar(value=1);ttk.Spinbox(form,from_=0,to=4095,textvariable=self.idv,width=8).grid(row=0,column=1)
         ttk.Label(form,text='Meta').grid(row=1,column=0);self.mv=tk.IntVar(value=0);ttk.Spinbox(form,from_=0,to=15,textvariable=self.mv,width=8).grid(row=1,column=1)
         ttk.Button(form,text='Übernehmen',command=self.custom_selected).grid(row=2,column=0,columnspan=2,pady=5)
-        ttk.Label(left,text='Linksklick = setzen\nRechtsklick = löschen\nMausrad = Ebene ±1\nStrg+Mausrad = ±10 Ebenen\nBild↑/Bild↓ = Ebene ±1\nHome/Ende = unten/oben',foreground='gray').pack(anchor='w',padx=8,pady=5)
+        ttk.Label(left,text='Links = setzen\nRechts = löschen\nMausrad = Ebene ±1\nStrg+Mausrad = ±10 Ebenen\nBild↑/Bild↓ = Ebene ±1\nPfeil ↑/↓ = Ebene ±1\nHome/Ende = unten/oben',foreground='gray').pack(anchor='w',padx=8,pady=5)
         right=ttk.Frame(main);main.add(right,weight=1)
         self.canvas=tk.Canvas(right,background='#20242a',highlightthickness=0);self.canvas.pack(fill='both',expand=True)
         self.canvas.bind('<Button-1>',self.paint);self.canvas.bind('<Button-3>',self.erase);self.canvas.bind('<B1-Motion>',self.paint);self.canvas.bind('<B3-Motion>',self.erase)
@@ -120,7 +123,11 @@ class BlockEditor(tk.Toplevel):
             hi=(b>>8)&15;aa[i//2]=(aa[i//2]&(0x0F if i%2==0 else 0xF0))|(hi<<4 if i%2==0 else hi);add=bytes(aa)
         elif add:
             aa[i//2]&=0x0F if i%2==0 else 0xF0;add=bytes(aa)
-        self.s=Schematic(self.s.name,self.s.width,self.s.height,self.s.length,self.s.materials,bytes(lo),bytes(da),add);self._draw()
+        self.s=Schematic(self.s.name,self.s.width,self.s.height,self.s.length,self.s.materials,bytes(lo),bytes(da),add)
+        if hasattr(self.s,'states'):
+            self.s.states=dict(self.s.states)
+            self.s.states.pop(i,None)
+        self._draw()
 
     def new_doc(self):
         if messagebox.askyesno('Neu','Aktuelles Bauwerk verwerfen?'):
@@ -128,11 +135,11 @@ class BlockEditor(tk.Toplevel):
     def _update_layer_range(self):
         try:self.layer_spin.configure(from_=0,to=max(0,self.s.height-1))
         except Exception:pass
-    def open_txt(self):
-        p=filedialog.askopenfilename(filetypes=[('TXT','*.txt')])
+    def open_file(self):
+        p=filedialog.askopenfilename(filetypes=[('Unterstützte Formate','*.schematic *.schem *.litematic *.obj *.txt')])
         if not p:return
         try:
-            self.s=__import__('src.txtformat',fromlist=['import_txt']).import_txt(p);self.layer=0;self.ly.set(0);self._update_layer_range();self._draw()
+            self.s=load_any(p);self.layer=0;self.ly.set(0);self._update_layer_range();self._draw()
         except Exception as e:messagebox.showerror('Fehler',str(e))
     def save_txt(self):
         p=filedialog.asksaveasfilename(defaultextension='.txt',initialfile=Path(self.s.name).stem+'.txt',filetypes=[('TXT','*.txt')])
