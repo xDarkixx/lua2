@@ -116,7 +116,7 @@ class BlockEditor(tk.Toplevel):
         x,z=self._xy(event)
         if 0<=x<self.s.width and 0<=z<self.s.length:self._set(x,self.layer,z,0,0)
     def _set(self,x,y,z,b,m):
-        i=self._index(x,y,z);lo=bytearray(self.s.blocks);da=bytearray(self.s.data);lo[i]=b&255;da[i]=m&15
+        i=self._index(x,y,z);old_states=dict(getattr(self.s,'states',{}));lo=bytearray(self.s.blocks);da=bytearray(self.s.data);lo[i]=b&255;da[i]=m&15
         add=self.s.addblocks
         aa=bytearray(add or bytes((self.s.width*self.s.height*self.s.length+1)//2))
         if b>255:
@@ -124,8 +124,8 @@ class BlockEditor(tk.Toplevel):
         elif add:
             aa[i//2]&=0x0F if i%2==0 else 0xF0;add=bytes(aa)
         self.s=Schematic(self.s.name,self.s.width,self.s.height,self.s.length,self.s.materials,bytes(lo),bytes(da),add)
-        if hasattr(self.s,'states'):
-            self.s.states=dict(self.s.states)
+        if old_states:
+            self.s.states=old_states
             self.s.states.pop(i,None)
         self._draw()
 
