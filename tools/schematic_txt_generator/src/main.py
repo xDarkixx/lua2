@@ -1,4 +1,4 @@
-import os,threading
+import os,threading,sys
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk,filedialog,messagebox
@@ -12,7 +12,10 @@ class App(tk.Tk):
  def ui(self):
   top=ttk.Frame(self,padding=18);top.pack(fill='x');ttk.Label(top,text='SchematicTxtGenerator',font=('Segoe UI',20,'bold')).pack(anchor='w');ttk.Label(top,text='Offline • Version-unabhängig • Schematic • Sponge Schem • Litematic • OBJ • reine TXT').pack(anchor='w',pady=(3,4));ttk.Label(top,text='Kein Minecraft, keine Mods und keine Befehle für Konvertierung oder Bearbeitung erforderlich.',foreground='gray').pack(anchor='w',pady=(0,12))
   b=ttk.Frame(top);b.pack(fill='x')
-  for text,cmd in [('Datei öffnen',self.open_file),('TXT exportieren',self.to_txt),('Block-Editor',self.editor),('3D Vorschau',self.show3d),('Konvertieren',self.convert),('EXE kompilieren',self.build),('Build-Ordner',self.open_dist)]:ttk.Button(b,text=text,command=cmd).pack(side='left',padx=4)
+  buttons=[('Datei öffnen',self.open_file),('TXT exportieren',self.to_txt),('Block-Editor',self.editor),('3D Vorschau',self.show3d),('Konvertieren',self.convert)]
+  if not getattr(sys,'frozen',False):
+   buttons += [('EXE kompilieren',self.build),('Build-Ordner',self.open_dist)]
+  for text,cmd in buttons:ttk.Button(b,text=text,command=cmd).pack(side='left',padx=4)
   mid=ttk.Frame(self,padding=(18,0,18,8));mid.pack(fill='both',expand=True);self.tree=ttk.Treeview(mid,columns=('x','y','z','id','meta','state'),show='headings')
   for c,t,w in [('x','X',70),('y','Y',70),('z','Z',70),('id','Block-ID',110),('meta','Metadata',100),('state','Block-State',380)]:self.tree.heading(c,text=t);self.tree.column(c,width=w,anchor='center')
   sb=ttk.Scrollbar(mid,command=self.tree.yview);self.tree.configure(yscrollcommand=sb.set);self.tree.pack(side='left',fill='both',expand=True);sb.pack(side='right',fill='y')
