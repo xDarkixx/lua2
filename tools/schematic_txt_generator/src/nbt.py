@@ -1,5 +1,5 @@
 import gzip, struct
-TAG_END=0; TAG_BYTE=1; TAG_SHORT=2; TAG_INT=3; TAG_LONG=4; TAG_FLOAT=5; TAG_DOUBLE=6; TAG_BYTE_ARRAY=7; TAG_STRING=8; TAG_LIST=9; TAG_COMPOUND=10
+TAG_END=0; TAG_BYTE=1; TAG_SHORT=2; TAG_INT=3; TAG_LONG=4; TAG_FLOAT=5; TAG_DOUBLE=6; TAG_BYTE_ARRAY=7; TAG_STRING=8; TAG_LIST=9; TAG_COMPOUND=10; TAG_INT_ARRAY=11; TAG_LONG_ARRAY=12
 class NBTError(Exception): pass
 def exact(f,n):
  b=f.read(n)
@@ -15,16 +15,24 @@ def readp(f,t):
  if t==5:return struct.unpack('>f',exact(f,4))[0]
  if t==6:return struct.unpack('>d',exact(f,8))[0]
  if t==7:
-  n=struct.unpack('>i',exact(f,4))[0]; return exact(f,n)
+  n=struct.unpack('>i',exact(f,4))[0]
+  if n<0:raise NBTError('Negative ByteArray-Länge.')
+  return exact(f,n)
  if t==8:return rstr(f)
  if t==9:
-  st=struct.unpack('>b',exact(f,1))[0]; n=struct.unpack('>i',exact(f,4))[0]; return {'type':st,'items':[readp(f,st) for _ in range(n)]}
+  st=struct.unpack('>b',exact(f,1))[0]; n=struct.unpack('>i',exact(f,4))[0]
+  if n<0:raise NBTError('Negative List-Länge.')
+  return {'type':st,'items':[readp(f,st) for _ in range(n)]}
  if t==10:
   d={}
   while True:
    st=struct.unpack('>b',exact(f,1))[0]
    if st==0:return d
    d[rstr(f)]=(st,readp(f,st))
+ if t in (11,12):
+  n=struct.unpack('>i',exact(f,4))[0]
+  if n<0:raise NBTError('Negative Array-Länge.')
+  return [readp(f,3 if t==11 else 4) for _ in range(n)]
  raise NBTError('Nicht unterstützter NBT-Tag: %s'%t)
 def read(path):
  with gzip.open(path,'rb') as f:
@@ -47,6 +55,9 @@ def writep(f,t,v):
  elif t==10:
   for k,(st,x) in v.items():f.write(struct.pack('>b',st));wstr(f,k);writep(f,st,x)
   f.write(b'\0')
+ elif t in (11,12):
+  vals=v or [];f.write(struct.pack('>i',len(vals)))
+  for x in vals:writep(f,3 if t==11 else 4,x)
  else:raise NBTError('Nicht unterstützter NBT-Tag: %s'%t)
 def write(path,name,root):
  with gzip.open(path,'wb') as f:f.write(b'\x0a');wstr(f,name);writep(f,10,root)
