@@ -67,17 +67,24 @@ def _longs(data):
     if len(data)%8: raise ValueError('Litematic: BlockStates-Länge ist ungültig.')
     return [struct.unpack('>Q',bytes(data[i:i+8]))[0] for i in range(0,len(data),8)]
 def _bits(values,bits,count):
-    # Litematica stores a fixed number of complete entries per 64-bit long.
-    per_long=max(1,64//bits);mask=(1<<bits)-1;out=[]
+    if bits<=0: raise ValueError('Litematic: ungültige Bitbreite.')
+    mask=(1<<bits)-1;out=[]
     for i in range(count):
-        q,slot=divmod(i,per_long)
+        bit=i*bits; q=bit>>6; off=bit&63
         if q>=len(values): raise ValueError('Litematic: BlockStates ist zu kurz.')
-        out.append((values[q]>>(slot*bits))&mask)
+        value=(values[q]>>off)
+        if off+bits>64:
+            if q+1>=len(values): raise ValueError('Litematic: BlockStates ist abgeschnitten.')
+            value |= values[q+1] << (64-off)
+        out.append(value&mask)
     return out
 def _pack_bits(indices,bits):
-    per_long=max(1,64//bits);n=(len(indices)+per_long-1)//per_long;vals=[0]*n;mask=(1<<bits)-1
+    if bits<=0: raise ValueError('Litematic: ungültige Bitbreite.')
+    mask=(1<<bits)-1;total_bits=len(indices)*bits;n=(total_bits+63)//64;vals=[0]*n
     for i,idx in enumerate(indices):
-        q,slot=divmod(i,per_long);vals[q]|=(int(idx)&mask)<<(slot*bits)
+        bit=i*bits;q=bit>>6;off=bit&63;value=int(idx)&mask
+        vals[q]|=(value<<off)&((1<<64)-1)
+        if off+bits>64: vals[q+1]|=value>>(64-off)
     return [v if v<(1<<63) else v-(1<<64) for v in vals]
 
 def load_litematic(path):
