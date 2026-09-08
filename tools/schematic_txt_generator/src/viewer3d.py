@@ -1,1 +1,0 @@
-# 3D viewer placeholder
