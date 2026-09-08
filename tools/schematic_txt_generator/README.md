@@ -1,14 +1,26 @@
 # SchematicTxtGenerator – Windows
 
-Offline-Windows-GUI zum Konvertieren, Prüfen und Bearbeiten von Minecraft-Bauwerken. **Minecraft muss auf dem PC nicht installiert oder gestartet sein.**
+Offline-Windows-GUI zum Konvertieren, Prüfen und Bearbeiten von Minecraft-Bauwerken. **Minecraft muss auf dem PC nicht installiert oder gestartet sein.** Der Converter ist bewusst **Minecraft-version-unabhängig**: Es gibt keine fest eingebaute Abhängigkeit von einer bestimmten Minecraft-Version oder einem bestimmten Mod.
 
 ## Unterstützte Formate
 
-- `.schematic` – klassisches gzip-NBT für Minecraft 1.7.10/Schematica/WorldEdit
-- `.schem` – Sponge Schematic
-- `.litematic` – Litematica
-- `.obj` – voxelbasierter OBJ-Import/Export
+- `.schematic` – klassisches gzip-NBT mit Legacy-Block-ID/Metadata
+- `.schem` – Sponge Schematic mit Block-State-Palette
+- `.litematic` – Litematica mit Block-State-Palette und Regionen
+- `.obj` – voxelbasierter OBJ-Import/Export des eigenen Formats
 - `.txt` – reines `SCHEMATIC_TXT 1` Textformat
+
+## Version-unabhängiges Datenmodell
+
+Der Converter arbeitet intern mit einem neutralen Voxel-Modell:
+
+- X, Y und Z Koordinaten
+- Breite, Höhe und Länge
+- Legacy-Block-ID und Metadata, **wenn die Quelldatei diese Informationen besitzt**
+- Block-State als Text, **wenn die Quelle einen Block-State liefert**
+- optionale Material-/Quellinformationen nur als Daten, nicht als notwendige Minecraft-Version
+
+Wichtig: Eine alte `.schematic` enthält normalerweise nur Legacy-IDs/Metadata. Der Converter kann daraus keinen modernen Blocknamen zuverlässig rekonstruieren. Bei `.schem` und `.litematic` werden vorhandene Block-State-Namen und Properties dagegen als `# state=...` in der TXT erhalten.
 
 ## Ziel: eine reine TXT
 
@@ -20,30 +32,36 @@ Beispiel:
 SCHEMATIC_TXT 1
 name=MeinBauwerk
 size=20,10,30
-materials=Alpha
+materials=Universal
 
 0,0,0=1:0
 1,0,0=1:0
-2,0,0=20:0
+2,0,0=20:0 # state=minecraft:glass
 ```
 
-Die TXT ist bewusst einfach gehalten: Sie kann auf beliebige Dateisysteme kopiert, archiviert oder von einem eigenen Roboter-/Builder-System eingelesen werden. Der Converter selbst enthält **keine zwingende Lua-Abhängigkeit** und benötigt für die Konvertierung kein Minecraft.
+Die TXT ist bewusst einfach und versionsneutral gehalten. Sie kann auf beliebige Dateisysteme kopiert, archiviert oder von einem eigenen Roboter-/Builder-System eingelesen werden. Der Converter selbst enthält **keine zwingende Lua-Abhängigkeit** und benötigt für die Konvertierung kein Minecraft.
+
+Der Export erfolgt von **unten nach oben**: zuerst Y=0, danach Y=1, Y=2 usw. Innerhalb einer Ebene wird Z und danach X verarbeitet.
 
 ## Block-Editor
 
-Der integrierte **Block-Editor** arbeitet direkt auf dem reinen Datenmodell. Funktionen:
+Der integrierte **Block-Editor** arbeitet direkt auf dem neutralen Datenmodell. Funktionen:
 
-- vorhandene TXT öffnen und wieder als TXT speichern
+- `.schematic`, `.schem`, `.litematic`, `.obj` und `.txt` direkt öffnen
+- TXT direkt exportieren
 - neues Bauwerk erstellen
 - Layer über Y auswählen
+- Mausrad: Ebene ±1
+- Strg+Mausrad: Ebene ±10
+- Bild↑/Bild↓ und Pfeil ↑/↓: Ebene ±1
+- Home/Ende: unterste/oberste Ebene
 - Blöcke per Linksklick setzen
 - Blöcke per Rechtsklick löschen
-- Zoom für große Layer
 - Block-ID 0–4095 und Metadata 0–15 manuell eingeben
-- kleine integrierte 1.7.10-Blockpalette
+- integrierte neutrale/Legacy-Referenzpalette
 - direkte 3D-Vorschau des bearbeiteten Bauwerks
 
-Damit lässt sich eine TXT auch komplett ohne Ausgangs-Schematic erstellen oder korrigieren.
+Die GUI begrenzt nicht die Größe der Quelldatei künstlich. Die Darstellung rendert jeweils nur die aktuell benötigte Editor-/Vorschauansicht.
 
 ## 3D-Vorschau
 
@@ -51,7 +69,9 @@ Die 3D-Ansicht läuft lokal über die Daten aus der Datei. Sie benötigt kein Mi
 
 ## Konvertierung
 
-`Datei öffnen` lädt eine Datei und zeigt Dimensionen sowie Blockdaten. `→ TXT` erzeugt direkt die portable Textdatei. `Konvertieren` kann weiterhin zwischen den unterstützten Formaten umwandeln.
+`Datei öffnen` lädt eine Datei und zeigt Dimensionen sowie Blockdaten. `TXT exportieren` erzeugt direkt die portable Textdatei. `Konvertieren` kann weiterhin zwischen den unterstützten Formaten umwandeln.
+
+Beim Konvertieren gilt: Das Programm kann nur Informationen erhalten, die das jeweilige Quellformat tatsächlich enthält. Eine Legacy-`.schematic` wird daher nicht künstlich mit erfundenen modernen Block-States angereichert.
 
 ## OpenComputers
 
