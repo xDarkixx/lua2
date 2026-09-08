@@ -66,25 +66,34 @@ def _longs(data):
     if isinstance(data,(list,tuple)): return [int(x)&((1<<64)-1) for x in data]
     if len(data)%8: raise ValueError('Litematic: BlockStates-Länge ist ungültig.')
     return [struct.unpack('>Q',bytes(data[i:i+8]))[0] for i in range(0,len(data),8)]
+
 def _bits(values,bits,count):
-    if bits<=0: raise ValueError('Litematic: ungültige Bitbreite.')
+    # Litematica stores one continuous bit stream. Entries may cross a 64-bit long boundary.
+    if bits < 1 or bits > 64: raise ValueError('Litematic: ungültige Bitbreite.')
     mask=(1<<bits)-1;out=[]
     for i in range(count):
-        bit=i*bits; q=bit>>6; off=bit&63
+        bit=i*bits;q=bit//64;off=bit%64
         if q>=len(values): raise ValueError('Litematic: BlockStates ist zu kurz.')
-        value=(values[q]>>off)
-        if off+bits>64:
-            if q+1>=len(values): raise ValueError('Litematic: BlockStates ist abgeschnitten.')
-            value |= values[q+1] << (64-off)
+        value=values[q]>>off
+        used=64-off
+        if used < bits:
+            if q+1>=len(values): raise ValueError('Litematic: BlockStates ist an einer Grenze abgeschnitten.')
+            value |= values[q+1]<<used
         out.append(value&mask)
     return out
+
 def _pack_bits(indices,bits):
-    if bits<=0: raise ValueError('Litematic: ungültige Bitbreite.')
-    mask=(1<<bits)-1;total_bits=len(indices)*bits;n=(total_bits+63)//64;vals=[0]*n
+    # Litematica uses a continuous low-bit-first stream, not whole-entry-per-long packing.
+    if bits < 1 or bits > 64: raise ValueError('Litematic: ungültige Bitbreite.')
+    mask=(1<<bits)-1
+    total_bits=len(indices)*bits
+    n=(total_bits+63)//64
+    vals=[0]*n
     for i,idx in enumerate(indices):
-        bit=i*bits;q=bit>>6;off=bit&63;value=int(idx)&mask
+        value=int(idx)&mask;bit=i*bits;q=bit//64;off=bit%64
         vals[q]|=(value<<off)&((1<<64)-1)
-        if off+bits>64: vals[q+1]|=value>>(64-off)
+        if off+bits>64:
+            vals[q+1]|=value>>(64-off)
     return [v if v<(1<<63) else v-(1<<64) for v in vals]
 
 def load_litematic(path):
@@ -122,7 +131,7 @@ def save_litematic(path,s):
                 if '=' in item:k,v=item.split('=',1);props[k]=(8,v)
             if props:c['Properties']=(10,props)
         plist.append(c)
-    region={'Position':(10,{'x':(3,0),'y':(3,0),'z':(3,0)}),'Size':(10,{'x':(3,s.width),'y':(3,s.height),'z':(3,s.length)}),'BlockStatePalette':(9,{'type':10,'items':plist}),'BlockStates':(12,_pack_bits(indices,bits)),'TileEntities':(9,{'type':10,'items':[]})}
+    region={'Position':(10,{'x':(3,0),'y':(3,0),'z':(3,0)}),'Size':(10,{'x':(3,s.width),'y':(3,s.height),'z':(3,s.length)}),'BlockStatePalette':(9,{'type':10,'items':plist}),'BlockStates':(12,_pack_bits(indices,bits)),'TileEntities':(9,{'type':10,'items':[]}),'Entities':(9,{'type':10,'items':[]})}
     root={'MinecraftDataVersion':(3,1976),'Version':(3,6),'SubVersion':(3,1),'Name':(8,s.name),'Regions':(10,{'Schematic':(10,region)})};write(path,'Litematic',root)
 
 def save_obj(path,s):
