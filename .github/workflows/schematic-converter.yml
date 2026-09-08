@@ -1,0 +1,51 @@
+name: SchematicTxtGenerator Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/schematic_txt_generator/**'
+      - '.github/workflows/schematic-converter.yml'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: tools/schematic_txt_generator
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build single-file EXE
+        run: python -m PyInstaller --clean --noconfirm SchematicTxtGenerator.spec
+
+      - name: Verify EXE
+        shell: pwsh
+        run: |
+          $exe = 'dist/SchematicTxtGenerator.exe'
+          if (-not (Test-Path $exe)) { throw "EXE wurde nicht erzeugt: $exe" }
+          $size = (Get-Item $exe).Length
+          if ($size -lt 100000) { throw "EXE ist unerwartet klein: $size Bytes" }
+          Write-Host "OK: $exe ($size Bytes)"
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SchematicTxtGenerator-Windows
+          path: tools/schematic_txt_generator/dist/SchematicTxtGenerator.exe
+          if-no-files-found: error
+          retention-days: 30
