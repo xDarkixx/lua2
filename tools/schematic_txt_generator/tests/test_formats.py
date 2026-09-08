@@ -1,4 +1,3 @@
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,15 +9,14 @@ from src.format_router import load_any, save_any
 class FormatRoundTripTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        # 3 x 2 x 2, including a high legacy ID to exercise AddBlocks.
         w, h, l = 3, 2, 2
-        blocks = bytearray(w*h*l)
-        data = bytearray(w*h*l)
+        blocks = bytearray(w * h * l)
+        data = bytearray(w * h * l)
         blocks[0] = 1
         blocks[1] = 20
         blocks[2] = 49
         blocks[3] = 57
-        blocks[4] = 255
+        blocks[4] = 255  # legacy-only ID; preserved by .schematic/.txt
         data[4] = 3
         s = Schematic('roundtrip', w, h, l, 'Alpha', bytes(blocks), bytes(data))
         s.addblocks = bytes([0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0])
@@ -33,6 +31,14 @@ class FormatRoundTripTests(unittest.TestCase):
             self.assertEqual(got.block_id(i), self.s.block_id(i))
             self.assertEqual(got.meta(i), self.s.meta(i))
 
+    def check_modern_states(self, got):
+        self.assertEqual((got.width, got.height, got.length), (3, 2, 2))
+        states = getattr(got, 'states', {})
+        self.assertEqual(states[0], 'minecraft:stone')
+        self.assertEqual(states[1], 'minecraft:glass')
+        self.assertEqual(states[2], 'minecraft:obsidian')
+        self.assertEqual(states[3], 'minecraft:diamond_block')
+
     def test_txt(self):
         p = Path(self.tmp.name) / 'a.txt'
         save_any(p, self.s)
@@ -46,12 +52,12 @@ class FormatRoundTripTests(unittest.TestCase):
     def test_schem(self):
         p = Path(self.tmp.name) / 'a.schem'
         save_any(p, self.s)
-        self.check_numeric(load_any(p))
+        self.check_modern_states(load_any(p))
 
     def test_litematic(self):
         p = Path(self.tmp.name) / 'a.litematic'
         save_any(p, self.s)
-        self.check_numeric(load_any(p))
+        self.check_modern_states(load_any(p))
 
     def test_obj_and_mtl(self):
         p = Path(self.tmp.name) / 'a.obj'
