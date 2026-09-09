@@ -156,13 +156,14 @@ def load_obj(path):
     if not parsed:raise ValueError('OBJ enthält keine SchematicTxtGenerator-Blockobjekte (block_ID_META_xX_yY_zZ).')
     if dimensions and len(dimensions)==3 and all(v>0 for v in dimensions):w,h,l=dimensions
     else:w=max(x for _,_,x,_,_ in parsed)+1;h=max(y for _,_,_,y,_ in parsed)+1;l=max(z for _,_,_,_,z in parsed)+1
-    low=bytearray(w*h*l);data=bytearray(w*h*l);add=bytearray((w*h*l+1)//2)
-    has_high=False
+    low=bytearray(w*h*l);data=bytearray(w*h*l);add=bytearray((w*h*l+1)//2);high_ids={};has_high=False
     for bid,md,x,y,z in parsed:
         if x<0 or y<0 or z<0 or x>=w or y>=h or z>=l:continue
         i=x+z*w+y*w*l;low[i]=bid&255;data[i]=md&15
         if bid>255:
-            has_high=True;hi=(bid>>8)&15
+            hi=(bid>>8)&15
+            if bid>4095: raise ValueError('OBJ: Legacy-Block-ID > 4095 wird nicht unterstützt.')
+            has_high=True
             if i%2==0:add[i//2]|=hi<<4
             else:add[i//2]|=hi
     return Schematic(path.stem,w,h,l,'Universal',bytes(low),bytes(data),bytes(add) if has_high else None)
