@@ -67,6 +67,28 @@ class FormatRoundTripTests(unittest.TestCase):
         self.check_numeric(load_any(p))
         self.assertEqual(load_any(p).block_id(4), 511)
 
+    def test_schematic_rejects_legacy_id_above_4095(self):
+        s = Schematic('invalid', 1, 1, 1, 'Universal', bytes([0]), bytes([0]))
+        s.blocks = bytes([0])
+        s.data = bytes([0])
+        s.addblocks = bytes([0x10])
+        # Simulate an out-of-range internal value without changing the public API.
+        s.block_id = lambda i: 4096
+        p = Path(self.tmp.name) / 'invalid.schematic'
+        with self.assertRaises(ValueError):
+            save_any(p, s)
+
+    def test_schematic_rejects_wrong_addblocks_length(self):
+        p = Path(self.tmp.name) / 'bad.schematic'
+        from src.nbt import write
+        write(p, 'Schematic', {
+            'Width': (2, 3), 'Height': (2, 2), 'Length': (2, 2),
+            'Materials': (8, 'Alpha'), 'Blocks': (7, bytes(12)),
+            'Data': (7, bytes(12)), 'AddBlocks': (7, bytes(1)),
+        })
+        with self.assertRaises(Exception):
+            load_any(p)
+
     def test_schem_roundtrip(self):
         p = Path(self.tmp.name) / 'a.schem'
         save_any(p, self.s)
