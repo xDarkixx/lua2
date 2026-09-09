@@ -33,6 +33,14 @@ class BlockEditor(tk.Toplevel):
         w,h,l=16,8,16; total=w*h*l
         return Schematic('Neues Bauwerk',w,h,l,'Universal',bytes(total),bytes(total))
 
+    def _sync_master(self):
+        if hasattr(self.master, 'current'):
+            self.master.current = self.s
+            preview = getattr(self.master, 'preview', None)
+            if callable(preview):
+                try: preview(self.s)
+                except Exception: pass
+
     def _ui(self):
         bar=ttk.Frame(self,padding=8); bar.pack(fill='x')
         ttk.Button(bar,text='Datei öffnen',command=self.open_file).pack(side='left',padx=3)
@@ -127,11 +135,12 @@ class BlockEditor(tk.Toplevel):
         if old_states:
             self.s.states=old_states
             self.s.states.pop(i,None)
+        self._sync_master()
         self._draw()
 
     def new_doc(self):
         if messagebox.askyesno('Neu','Aktuelles Bauwerk verwerfen?'):
-            self.s=self.new_schematic();self.layer=0;self.ly.set(0);self._update_layer_range();self._draw()
+            self.s=self.new_schematic();self.layer=0;self.ly.set(0);self._update_layer_range();self._sync_master();self._draw()
     def _update_layer_range(self):
         try:self.layer_spin.configure(from_=0,to=max(0,self.s.height-1))
         except Exception:pass
@@ -139,7 +148,7 @@ class BlockEditor(tk.Toplevel):
         p=filedialog.askopenfilename(filetypes=[('Unterstützte Formate','*.schematic *.schem *.litematic *.obj *.txt')])
         if not p:return
         try:
-            self.s=load_any(p);self.layer=0;self.ly.set(0);self._update_layer_range();self._draw()
+            self.s=load_any(p);self.layer=0;self.ly.set(0);self._update_layer_range();self._sync_master();self._draw()
         except Exception as e:messagebox.showerror('Fehler',str(e))
     def save_txt(self):
         p=filedialog.asksaveasfilename(defaultextension='.txt',initialfile=Path(self.s.name).stem+'.txt',filetypes=[('TXT','*.txt')])
