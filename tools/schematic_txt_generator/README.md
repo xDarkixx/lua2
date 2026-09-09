@@ -85,7 +85,7 @@ Mit `Start_Generator.bat` kann die GUI gestartet werden. Mit `Build_EXE.bat` bzw
 
 ## Tests
 
-Unter `tests/test_formats.py` liegen Round-Trip-Tests für TXT, `.schematic`, `.schem`, `.litematic` und OBJ/MTL.
+Unter `tests/test_formats.py` liegen Round-Trip-Tests für TXT, `.schematic`, `.schem`, `.litematic` und OBJ/MTL. Der OBJ-Test enthält ausdrücklich auch einen Legacy-Block mit ID 511, damit die `AddBlocks`-Übertragung über 255 nicht unbemerkt kaputtgeht.
 
 ```bat
 python -m unittest discover -s tests -v
