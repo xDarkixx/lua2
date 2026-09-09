@@ -68,14 +68,12 @@ def _longs(data):
     return [struct.unpack('>Q',bytes(data[i:i+8]))[0] for i in range(0,len(data),8)]
 
 def _bits(values,bits,count):
-    # Litematica stores one continuous bit stream. Entries may cross a 64-bit long boundary.
     if bits < 1 or bits > 64: raise ValueError('Litematic: ungültige Bitbreite.')
     mask=(1<<bits)-1;out=[]
     for i in range(count):
         bit=i*bits;q=bit//64;off=bit%64
         if q>=len(values): raise ValueError('Litematic: BlockStates ist zu kurz.')
-        value=values[q]>>off
-        used=64-off
+        value=values[q]>>off;used=64-off
         if used < bits:
             if q+1>=len(values): raise ValueError('Litematic: BlockStates ist an einer Grenze abgeschnitten.')
             value |= values[q+1]<<used
@@ -83,17 +81,11 @@ def _bits(values,bits,count):
     return out
 
 def _pack_bits(indices,bits):
-    # Litematica uses a continuous low-bit-first stream, not whole-entry-per-long packing.
     if bits < 1 or bits > 64: raise ValueError('Litematic: ungültige Bitbreite.')
-    mask=(1<<bits)-1
-    total_bits=len(indices)*bits
-    n=(total_bits+63)//64
-    vals=[0]*n
+    mask=(1<<bits)-1;total_bits=len(indices)*bits;n=(total_bits+63)//64;vals=[0]*n
     for i,idx in enumerate(indices):
-        value=int(idx)&mask;bit=i*bits;q=bit//64;off=bit%64
-        vals[q]|=(value<<off)&((1<<64)-1)
-        if off+bits>64:
-            vals[q+1]|=value>>(64-off)
+        value=int(idx)&mask;bit=i*bits;q=bit//64;off=bit%64;vals[q]|=(value<<off)&((1<<64)-1)
+        if off+bits>64: vals[q+1]|=value>>(64-off)
     return [v if v<(1<<63) else v-(1<<64) for v in vals]
 
 def load_litematic(path):
@@ -164,11 +156,16 @@ def load_obj(path):
     if not parsed:raise ValueError('OBJ enthält keine SchematicTxtGenerator-Blockobjekte (block_ID_META_xX_yY_zZ).')
     if dimensions and len(dimensions)==3 and all(v>0 for v in dimensions):w,h,l=dimensions
     else:w=max(x for _,_,x,_,_ in parsed)+1;h=max(y for _,_,_,y,_ in parsed)+1;l=max(z for _,_,_,_,z in parsed)+1
-    low=bytearray(w*h*l);data=bytearray(w*h*l)
+    low=bytearray(w*h*l);data=bytearray(w*h*l);add=bytearray((w*h*l+1)//2)
+    has_high=False
     for bid,md,x,y,z in parsed:
         if x<0 or y<0 or z<0 or x>=w or y>=h or z>=l:continue
         i=x+z*w+y*w*l;low[i]=bid&255;data[i]=md&15
-    return Schematic(path.stem,w,h,l,'Universal',bytes(low),bytes(data))
+        if bid>255:
+            has_high=True;hi=(bid>>8)&15
+            if i%2==0:add[i//2]|=hi<<4
+            else:add[i//2]|=hi
+    return Schematic(path.stem,w,h,l,'Universal',bytes(low),bytes(data),bytes(add) if has_high else None)
 
 def load_any(path):
     p=Path(path);e=p.suffix.lower()
