@@ -3,7 +3,11 @@ import unittest
 from pathlib import Path
 
 from src.schematic import Schematic
-from src.format_router import load_any, save_any, _nbt, _v, _list, _state_name, _longs, _bits
+from src.format_router import (
+    load_any, save_any, _nbt, _v, _list, _state_name,
+    _longs, _bits, _pack_bits, _varints, _put_varints,
+)
+from src.txtformat import import_txt
 
 
 class FormatRoundTripTests(unittest.TestCase):
@@ -18,8 +22,10 @@ class FormatRoundTripTests(unittest.TestCase):
         blocks[3] = 57
         blocks[4] = 255
         data[4] = 3
-        s = Schematic('roundtrip', w, h, l, 'Alpha', bytes(blocks), bytes(data))
-        s.addblocks = bytes([0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0])
+        # Real AddBlocks entry for index 4: high nibble 1 -> ID 511.
+        add = bytearray((w * h * l + 1) // 2)
+        add[2] = 0x10
+        s = Schematic('roundtrip', w, h, l, 'Alpha', bytes(blocks), bytes(data), bytes(add))
         self.s = s
 
     def tearDown(self):
@@ -39,31 +45,53 @@ class FormatRoundTripTests(unittest.TestCase):
         self.assertEqual(states[2], 'minecraft:obsidian')
         self.assertEqual(states[3], 'minecraft:diamond_block')
 
-    def test_txt(self):
+    def test_txt_roundtrip_including_high_legacy_id(self):
         p = Path(self.tmp.name) / 'a.txt'
         save_any(p, self.s)
-        self.check_numeric(load_any(p))
+        got = load_any(p)
+        self.check_numeric(got)
+        self.assertEqual(got.block_id(4), 511)
 
-    def test_schematic(self):
+    def test_txt_preserves_modern_state_and_properties(self):
+        s = Schematic('states', 2, 1, 1, 'Universal', bytes([20, 1]), bytes(2))
+        s.states = {0: 'minecraft:oak_log[axis=y]', 1: 'minecraft:stone'}
+        p = Path(self.tmp.name) / 'states.txt'
+        save_any(p, s)
+        got = load_any(p)
+        self.assertEqual(getattr(got, 'states', {})[0], 'minecraft:oak_log[axis=y]')
+        self.assertEqual(getattr(got, 'states', {})[1], 'minecraft:stone')
+
+    def test_schematic_roundtrip_addblocks(self):
         p = Path(self.tmp.name) / 'a.schematic'
         save_any(p, self.s)
         self.check_numeric(load_any(p))
+        self.assertEqual(load_any(p).block_id(4), 511)
 
-    def test_schem(self):
+    def test_schem_roundtrip(self):
         p = Path(self.tmp.name) / 'a.schem'
         save_any(p, self.s)
-        self.check_modern_states(load_any(p))
+        got = load_any(p)
+        self.check_modern_states(got)
+        self.assertEqual(getattr(got, 'states', {})[4], 'minecraft:stone')
 
-    def test_litematic(self):
+    def test_litematic_roundtrip_crosses_long_boundary(self):
+        # 5-bit entries deliberately cross 64-bit boundaries.
+        values = [0, 1, 2, 3, 7, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+        packed = _pack_bits(values, 5)
+        self.assertEqual(_bits([x & ((1 << 64) - 1) for x in packed], 5, len(values)), values)
+
+        s = Schematic('litematic', len(values), 1, 1, 'Universal', bytes([1] * len(values)), bytes(len(values)))
+        s.states = {i: f'minecraft:test_block_{v}' for i, v in enumerate(values)}
         p = Path(self.tmp.name) / 'a.litematic'
-        save_any(p, self.s)
+        save_any(p, s)
         root = _nbt(p)
         region = next(iter(_v(root, 'Regions', {}).values()))[1]
         palette = [_state_name(x) for x in _list(_v(region, 'BlockStatePalette', {}))]
         bits = max(2, (len(palette) - 1).bit_length())
         raw = _longs(_v(region, 'BlockStates', []))
-        self.assertEqual(len(_bits(raw, bits, 12)), 12)
-        self.check_modern_states(load_any(p))
+        indices = _bits(raw, bits, len(values))
+        self.assertEqual(len(indices), len(values))
+        self.assertEqual(load_any(p).width, len(values))
 
     def test_obj_and_mtl(self):
         p = Path(self.tmp.name) / 'a.obj'
@@ -71,6 +99,25 @@ class FormatRoundTripTests(unittest.TestCase):
         self.assertTrue(p.exists())
         self.assertTrue(p.with_suffix('.mtl').exists())
         self.check_numeric(load_any(p))
+
+    def test_varint_helpers(self):
+        values = [0, 1, 127, 128, 255, 16384, 1048575]
+        self.assertEqual(_varints(_put_varints(values)), values)
+
+    def test_invalid_txt_is_rejected(self):
+        p = Path(self.tmp.name) / 'bad.txt'
+        p.write_text(
+            'SCHEMATIC_TXT 1\nsize=2,2,2\n2,0,0=1:0\n',
+            encoding='utf-8',
+        )
+        with self.assertRaises(ValueError):
+            import_txt(p)
+
+    def test_unsupported_extension_is_rejected(self):
+        p = Path(self.tmp.name) / 'a.xyz'
+        p.write_text('x', encoding='utf-8')
+        with self.assertRaises(ValueError):
+            load_any(p)
 
 
 if __name__ == '__main__':
